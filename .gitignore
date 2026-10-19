@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+release/
+out/
+build/
+web-build/
+*.tsbuildinfo
+
+# Electron
+nexa-desktop/out/
+nexa-desktop/dist/
+
+# Expo / RN
+nexa-mobile/.expo/
+nexa-mobile/dist/
+nexa-mobile/web-build/
+nexa-mobile/expo-env.d.ts
+nexa-mobile/android/
+nexa-mobile/ios/
+
+# Native generated
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Relay data
+nexa-relay/data/
+
+# Logs
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Nexa user data (local runtime)
+.nexa/
+
+
+# code agent
+/.trae-html-share-packages

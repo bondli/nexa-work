@@ -1,0 +1,1373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nexa · 原型预览</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: 'hsl(0 0% 100%)', foreground: 'hsl(222 47% 11%)',
+            muted: 'hsl(210 40% 96%)', 'muted-foreground': 'hsl(215 16% 47%)',
+            border: 'hsl(214 32% 91%)', input: 'hsl(214 32% 91%)',
+            ring: 'hsl(222 84% 4%)', primary: 'hsl(222 84% 4%)',
+            'primary-foreground': 'hsl(210 40% 98%)', secondary: 'hsl(210 40% 96%)',
+            'secondary-foreground': 'hsl(222 47% 11%)', accent: 'hsl(210 40% 96%)',
+            'accent-foreground': 'hsl(222 47% 11%)', card: 'hsl(0 0% 100%)',
+            'card-foreground': 'hsl(222 47% 11%)', destructive: 'hsl(0 84% 60%)',
+            success: 'hsl(142 76% 36%)', warning: 'hsl(38 92% 50%)',
+            nexa: { DEFAULT: '#6366f1', dark: '#4f46e5' }
+          },
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+            mono: ['JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Consolas', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body { font-feature-settings: "cv11", "ss01"; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: hsl(214 32% 91%); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: hsl(215 16% 47%); }
+    .fade-in { animation: fadeIn 0.3s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .step-line { position: relative; }
+    .step-line::before { content: ''; position: absolute; left: 7px; top: 20px; bottom: -4px; width: 2px; background: hsl(214 32% 91%); }
+    .step-line:last-child::before { display: none; }
+    .phone-shadow { box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+    .highlight { background: linear-gradient(120deg, rgba(99,102,241,0.1) 0%, rgba(99,102,241,0.02) 100%); border-left: 3px solid #6366f1; }
+    .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    /* Nav rail (Codex-style: 56px icon-only navigation, click to switch right area) */
+    .rail-btn { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; transition: all .15s; }
+    .rail-btn:hover { background: hsl(210 40% 96%); }
+    .rail-btn:focus-visible { outline: 2px solid hsl(222 84% 4%); outline-offset: 2px; }
+    .rail-btn.active { background: hsl(210 40% 96%); color: hsl(222 47% 11%); }
+  </style>
+</head>
+<body class="bg-[hsl(0,0%,97%)] text-[hsl(222,47%,11%)] font-sans h-screen overflow-hidden">
+<div class="flex h-screen w-screen">
+  <!-- LEFT NAV RAIL (78px, Logo at top + icon navigation) -->
+  <aside id="nav-rail" class="shrink-0 bg-white border-r border-border flex flex-col items-center" style="width:78px">
+    <!-- Logo + traffic light area (64px) -->
+    <div class="h-16 w-full shrink-0 flex flex-col items-center justify-end pb-2">
+      <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 shrink-0" fill="currentColor" style="margin-top:27px"><path d="M757.333333 842.666667l13.269334 39.850666A42.666667 42.666667 0 0 1 730.154667 938.666667H293.845333a42.666667 42.666667 0 0 1-40.448-56.149334l13.269334-39.850666c10.24-30.72 30.464-56.149333 56.32-73.088A360.576 360.576 0 0 0 490.666667 810.666667h42.666666a361.088 361.088 0 0 0 167.68-41.002667c25.856 16.853333 46.08 42.24 56.32 73.002667z"/><path d="M768 85.333333a128 128 0 0 1 128 128v153.002667c22.954667 8.106667 39.893333 28.928 42.368 53.973333L938.666667 426.666667v106.666666a64 64 0 0 1-57.856 63.701334L874.666667 597.333333l-10.752 0.042667A362.752 362.752 0 0 1 533.333333 810.666667h-42.666666a362.752 362.752 0 0 1-330.581334-213.290667L149.333333 597.333333A64 64 0 0 1 85.333333 533.333333V426.666667a64 64 0 0 1 52.48-62.976A362.794667 362.794667 0 0 1 490.666667 85.333333H768z m-234.154667 99.541334h-42.666666a266.666667 266.666667 0 0 0-9.813334 533.162666l9.813334 0.170667h42.666666a266.666667 266.666667 0 0 0 0-533.333333z"/><path d="M533.845333 184.874667a266.666667 266.666667 0 0 1 0 533.333333h-42.666666a266.666667 266.666667 0 1 1 0-533.333333h42.666666zM394.666667 362.666667C365.226667 362.666667 341.333333 386.56 341.333333 416v85.333333a53.333333 53.333333 0 0 0 106.666667 0v-85.333333c0-29.44-23.893333-53.333333-53.333333-53.333333z m234.666666 0c-29.44 0-53.333333 23.893333-53.333333 53.333333v85.333333a53.333333 53.333333 0 0 0 106.666667 0v-85.333333c0-29.44-23.893333-53.333333-53.333334-53.333333z"/></svg>
+    </div>
+    <nav id="rail-nav" class="flex flex-col items-center gap-2 pt-4"></nav>
+    <div class="flex-1"></div>
+    <button onclick="navigate('settings')" data-section="settings" class="rail-btn text-muted-foreground" title="设置">
+      <svg class="w-[22px] h-[22px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"/>
+      </svg>
+    </button>
+    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold shrink-0 my-3 cursor-default" title="Bond Li">B</div>
+  </aside>
+
+  <!-- TASK LIST PANEL (chat view only: left list + right detail) -->
+  <aside id="task-panel" class="w-64 shrink-0 bg-white border-r border-border flex-col hidden">
+    <!-- Panel header: Logo icon (next to traffic lights) -->
+      </div>
+
+    <!-- New task button -->
+    <div class="p-2">
+      <button onclick="showNewTask()" class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新建任务
+      </button>
+    </div>
+
+    <!-- Task list (free flat + project grouped) -->
+    <div class="px-3 pb-2 overflow-y-auto flex-1 min-h-0" id="recent-tasks"></div>
+  </aside>
+
+  <!-- MAIN AREA -->
+  <main class="flex-1 flex flex-col min-w-0 overflow-hidden" id="main-area"></main>
+</div>
+
+<!-- ONBOARDING MODAL -->
+<div id="onboarding-modal" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm items-center justify-center hidden">
+  <div class="bg-white rounded-2xl w-[560px] max-w-[90vw] shadow-2xl overflow-hidden fade-in">
+    <div class="px-8 py-6 border-b border-border">
+      <div class="flex items-center gap-2">
+        <div class="w-6 h-6 rounded-full bg-nexa text-white text-[11px] font-semibold flex items-center justify-center">1</div>
+        <span class="text-xs font-medium">基本信息</span>
+        <div class="w-10 h-0.5 bg-border"></div>
+        <div class="w-6 h-6 rounded-full bg-muted text-muted-foreground text-[11px] font-semibold flex items-center justify-center">2</div>
+        <span class="text-xs text-muted-foreground">模型配置</span>
+        <div class="w-10 h-0.5 bg-border"></div>
+        <div class="w-6 h-6 rounded-full bg-muted text-muted-foreground text-[11px] font-semibold flex items-center justify-center">3</div>
+        <span class="text-xs text-muted-foreground">偏好</span>
+      </div>
+    </div>
+    <div id="ob-content" class="px-8 py-6">
+      <h2 class="text-xl font-semibold mb-1">欢迎使用 Nexa</h2>
+      <p class="text-sm text-muted-foreground mb-6">让我先认识一下你，之后就可以开始帮你干活了。</p>
+      <div>
+        <label class="text-sm font-medium mb-1.5 block">Nexa 怎么称呼你？</label>
+        <input type="text" class="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-nexa/30" placeholder="例如: Bond" value="Bond">
+      </div>
+      <div class="mt-8 flex justify-end gap-2">
+        <button onclick="closeOnboarding()" class="text-sm text-muted-foreground hover:text-foreground px-4 py-2">跳过</button>
+        <button onclick="closeOnboarding()" class="text-sm font-medium px-5 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90">开始使用 Nexa</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ Router & State ============ */
+/* Nav rail (Codex-style icon rail): click switches the right area */
+const RAIL_NAV = [
+  { id: 'chat', label: '任务', icon: '<path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/>' },
+  { id: 'scheduled', label: '定时任务', icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
+  { id: 'library', label: '资料库', icon: '<path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>' },
+  { id: 'skills', label: '技能包', icon: '<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>' },
+  { divider: true },
+  { id: 'phonescreen', label: '手机端预览', icon: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>' },
+  { id: 'plugin', label: '浏览器插件', icon: '<rect width="7" height="7" x="14" y="3" rx="1"/><path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3"/>' },
+];
+
+function renderRail() {
+  const nav = document.getElementById('rail-nav');
+  nav.innerHTML = RAIL_NAV.map(n => {
+    if (n.divider) return '<div class="w-5 h-px bg-border my-0.5 shrink-0"></div>';
+    return `<button onclick="navigate('${n.id}')" data-section="${n.id}" class="rail-btn text-muted-foreground" title="${n.label}">
+      <svg class="w-[22px] h-[22px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${n.icon}</svg>
+    </button>`;
+  }).join('');
+}
+
+/* ============ Search/Filter Popovers ============ */
+let searchPopoverOpen = false;
+let filterPopoverOpen = false;
+function toggleSearchPopover() {
+  searchPopoverOpen = !searchPopoverOpen;
+  filterPopoverOpen = false;
+  document.getElementById('search-popover').classList.toggle('hidden', !searchPopoverOpen);
+  document.getElementById('filter-popover').classList.add('hidden');
+  if (searchPopoverOpen) setTimeout(() => document.getElementById('task-search').focus(), 50);
+}
+function toggleFilterPopover() {
+  filterPopoverOpen = !filterPopoverOpen;
+  searchPopoverOpen = false;
+  document.getElementById('filter-popover').classList.toggle('hidden', !filterPopoverOpen);
+  document.getElementById('search-popover').classList.add('hidden');
+}
+function updateSearchDot() {
+  const val = document.getElementById('task-search').value.trim();
+  document.getElementById('search-active-dot').classList.toggle('hidden', !val);
+}
+
+/* ============ Task Filter (WorkBuddy-style: free flat + project grouped) ============ */
+/* Data model: free tasks are flat; project sessions are grouped by project dir */
+const ALL_TASKS = [
+  // --- FREE tasks (flat, shown at top under "自由任务") ---
+  { id: 't1', type: 'free', title: 'AI Agent 框架调研报告', status: 'running', time: '刚刚' },
+  { id: 't2', type: 'free', title: '特斯拉股价监控脚本', status: 'completed', time: '2 小时前' },
+  { id: 't3', type: 'free', title: '杭州周末两日游规划', status: 'completed', time: '昨天' },
+  { id: 't4', type: 'free', title: '周报生成 - 10 月第一周', status: 'completed', time: '2 天前' },
+  { id: 't5', type: 'free', title: '图片批量重命名脚本', status: 'failed', time: '3 天前' },
+  { id: 't6', type: 'free', title: '飞书文档整理脚本', status: 'completed', time: '5 天前' },
+  { id: 't8', type: 'free', title: 'Deepseek 模型测评', status: 'completed', time: '上周' },
+
+  // --- PROJECT groups (sessions grouped by project dir) ---
+  {
+    type: 'project',
+    projectPath: '/Users/bondli/projects/recipe-app',
+    projectName: 'recipe-app',
+    sessions: [
+      { id: 't7a', title: '会员能力 - 设计方案', status: 'completed', time: '2 天前' },
+      { id: 't7b', title: '会员能力 - 后端 API', status: 'completed', time: '昨天' },
+      { id: 't7c', title: '会员能力 - 前端 UI 联调', status: 'running', time: '6 小时前' },
+    ],
+  },
+  {
+    type: 'project',
+    projectPath: '/Users/bondli/projects/finance-tracker',
+    projectName: 'finance-tracker',
+    sessions: [
+      { id: 't9a', title: '项目初始化 + README', status: 'completed', time: '3 天前' },
+      { id: 't9b', title: '账单导入功能', status: 'running', time: '1 小时前' },
+    ],
+  },
+];
+
+let currentFilter = 'all';
+let currentSearch = '';
+// Expand state per project group: default expanded if contains running session
+const GROUP_EXPANDED = {};
+function initGroupExpand() {
+  ALL_TASKS.forEach(g => {
+    if (g.type === 'project') {
+      GROUP_EXPANDED[g.projectPath] = g.sessions.some(s => s.status === 'running');
+    }
+  });
+}
+initGroupExpand();
+function toggleGroup(projectPath) {
+  GROUP_EXPANDED[projectPath] = !GROUP_EXPANDED[projectPath];
+  renderRecentTasks();
+}
+
+/* Status dot helper */
+function statusDot(status) {
+  if (status === 'running') return '<span class="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0"></span>';
+  if (status === 'failed') return '<span class="w-1.5 h-1.5 rounded-full bg-destructive shrink-0"></span>';
+  if (status === 'project-paused') return '<span class="w-1.5 h-1.5 rounded-full bg-warning shrink-0"></span>';
+  return '<span class="w-1.5 h-1.5 rounded-full bg-success/50 shrink-0"></span>';
+}
+/* Status filter check */
+function matchFilter(status) {
+  if (currentFilter === 'all') return true;
+  if (currentFilter === 'running') return status === 'running' || status === 'project-paused';
+  if (currentFilter === 'completed') return status === 'completed';
+  if (currentFilter === 'failed') return status === 'failed';
+  return true;
+}
+/* Search check */
+function matchSearch(text) {
+  if (!currentSearch) return true;
+  return text.toLowerCase().includes(currentSearch.toLowerCase());
+}
+
+function renderRecentTasks() {
+  const el = document.getElementById('recent-tasks');
+
+  // Split into free filtered & project groups with filtered sessions
+  const freeFiltered = [];
+  const projectGroups = [];
+
+  for (const g of ALL_TASKS) {
+    if (g.type === 'free') {
+      if (!matchFilter(g.status)) continue;
+      if (!matchSearch(g.title)) continue;
+      freeFiltered.push(g);
+    } else {
+      // project group: keep group if projectName matches search OR any session passes
+      const matchingSessions = g.sessions.filter(s => matchFilter(s.status) && matchSearch(s.title));
+      const groupNameMatch = matchSearch(g.projectName);
+      if (matchingSessions.length === 0 && !groupNameMatch) continue;
+      // if search matches projectName directly but no individual session, show all sessions in that group
+      const sessionsToShow = groupNameMatch && matchingSessions.length === 0 ? g.sessions.filter(s => matchFilter(s.status)) : matchingSessions;
+      if (sessionsToShow.length === 0) continue;
+      const expanded = GROUP_EXPANDED[g.projectPath] ?? true;
+      const runningCount = sessionsToShow.filter(s => s.status === 'running').length;
+      const groupFiltered = { ...g, sessions: sessionsToShow, _expanded: expanded, _runningCount: runningCount };
+      projectGroups.push(groupFiltered);
+      // auto-expand if search hit or has running
+      if (currentSearch || runningCount > 0) GROUP_EXPANDED[g.projectPath] = true;
+    }
+  }
+
+  const totalCount = freeFiltered.length + projectGroups.reduce((s, g) => s + g.sessions.length, 0);
+  if (totalCount === 0) {
+    el.innerHTML = `<div class="text-[11px] text-muted-foreground text-center py-6">没有匹配的任务</div>`;
+    return;
+  }
+
+  let html = '';
+
+  // --- FREE section ---
+  if (freeFiltered.length > 0) {
+    html += `<div class="px-2 pt-1 pb-0.5 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase sidebar-text">自由任务</div>`;
+    html += freeFiltered.map(t => {
+      const active = t.id === 't1';
+      return `<button onclick="loadTask()" class="w-full text-left px-2 py-1.5 rounded-md ${active ? 'bg-secondary' : 'hover:bg-accent'} transition">
+        <div class="flex items-center gap-1.5">
+          ${statusDot(t.status)}
+          <span class="text-[12px] truncate flex-1 leading-tight sidebar-text">${t.title}</span>
+        </div>
+        <div class="text-[10px] text-muted-foreground ml-3 mt-0.5 sidebar-text">${t.time}</div>
+      </button>`;
+    }).join('');
+  }
+
+  // --- PROJECT groups ---
+  for (const g of projectGroups) {
+    html += `<div class="mt-1.5">
+      <button onclick="toggleGroup('${g.projectPath}')" class="w-full flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-accent transition text-left">
+        <svg class="w-2.5 h-2.5 text-muted-foreground transition-transform shrink-0 ${g._expanded ? '' : '-rotate-90'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        <svg class="w-3 h-3 text-amber-500 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+        <span class="text-[12px] font-medium truncate flex-1 leading-tight sidebar-text">${g.projectName}</span>
+        <span class="text-[10px] text-muted-foreground bg-muted px-1.5 rounded sidebar-text">${g.sessions.length}</span>
+        ${g._runningCount > 0 ? '<span class="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0"></span>' : ''}
+      </button>`;
+    if (g._expanded) {
+      html += g.sessions.map((s, i) => {
+        const active = s.id === 't7c';
+        const chevron = i === g.sessions.length - 1 ? '│' : '│';
+        return `<button onclick="loadTask()" class="w-full text-left pl-5 pr-2 py-1 rounded-md ${active ? 'bg-secondary' : 'hover:bg-accent'} transition flex items-center gap-1.5">
+          <span class="w-2 h-px bg-border shrink-0"></span>
+          ${statusDot(s.status)}
+          <span class="text-[11.5px] truncate flex-1 leading-tight sidebar-text">${s.title}</span>
+          <span class="text-[10px] text-muted-foreground shrink-0 sidebar-text">${s.time}</span>
+        </button>`;
+      }).join('');
+    }
+    html += `</div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+function filterTasks() {
+  currentSearch = document.getElementById('task-search').value.trim();
+  renderRecentTasks();
+}
+function clearSearch() {
+  document.getElementById('task-search').value = '';
+  filterTasks();
+}
+function setTaskFilter(f) {
+  currentFilter = f;
+  ['all','running','completed','failed'].forEach(k => {
+    const btn = document.getElementById('filter-' + k);
+    if (!btn) return;
+    if (k === f) btn.className = 'text-[11px] px-2.5 py-1 rounded-full border bg-nexa/10 text-nexa border-nexa/30 font-medium';
+    else btn.className = 'text-[11px] px-2.5 py-1 rounded-full border border-border hover:bg-secondary text-muted-foreground';
+  });
+  renderRecentTasks();
+}
+
+let currentSection = 'chat';
+function navigate(section) {
+  currentSection = section;
+  // rail 图标高亮
+  document.querySelectorAll('.rail-btn[data-section]').forEach(b => {
+    const isActive = b.dataset.section === section;
+    b.classList.toggle('bg-secondary', isActive);
+    b.classList.toggle('text-secondary-foreground', isActive);
+    b.classList.toggle('text-muted-foreground', !isActive);
+  });
+  // 任务列表面板仅在任务视图显示（左列表 + 右详情分栏）
+  const panel = document.getElementById('task-panel');
+  panel.classList.toggle('hidden', section !== 'chat');
+  panel.classList.toggle('flex', section === 'chat');
+  renderSection();
+}
+function showNewTask() { chatEmpty = true; navigate('chat'); }
+function loadTask() { chatEmpty = false; navigate('chat'); }
+
+function renderSection() {
+  const titles = {
+    chat: { title: 'AI Agent 框架调研报告', status: '执行中', expert: '研究员', model: 'deepseek-chat', showArtifacts: true },
+    skills: { title: '技能包', status: null, expert: null, model: null },
+    library: { title: '资料库', status: null, expert: null, model: null },
+    scheduled: { title: '定时任务', status: null, expert: null, model: null },
+    settings: { title: '设置', status: null, expert: null, model: null },
+    phonescreen: { title: '手机端预览', status: null, expert: null, model: null },
+    plugin: { title: '浏览器插件预览', status: null, expert: null, model: null },
+  };
+  const t = titles[currentSection];
+  const main = document.getElementById('main-area');
+  main.innerHTML = renderTopbar(t) + renderSectionContent(currentSection);
+}
+
+function renderTopbar(t) {
+  const statusBadge = t.status ? `<span class="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded bg-success/10 text-success"><span class="w-1 h-1 rounded-full bg-success animate-pulse"></span>${t.status}</span>` : '';
+  const expertBtn = t.expert ? `<button class="flex items-center gap-1.5 px-2 py-1 rounded text-xs bg-secondary hover:bg-muted"><span class="w-1.5 h-1.5 rounded-full bg-nexa"></span>${t.expert}<span class="text-muted">▾</span></button>` : '';
+  const modelBtn = t.model ? `<button class="flex items-center gap-1.5 px-2 py-1 rounded text-xs bg-secondary hover:bg-muted"><span>${t.model}</span><span class="text-muted">▾</span></button>` : '';
+  const onboarding = t.status ? '' : `<button onclick="showOnboarding()" class="p-1.5 rounded hover:bg-secondary text-muted-foreground" title="初始化向导">
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></button>`;
+  return `<header class="h-12 border-b border-border bg-white/80 backdrop-blur flex items-center px-4 gap-3 shrink-0">
+    <div class="flex items-center gap-2 min-w-0 flex-1">
+      ${onboarding}
+      <h1 class="text-sm font-semibold truncate">${t.title}</h1>
+      ${statusBadge}
+    </div>
+    <div class="flex items-center gap-2">${expertBtn}${modelBtn}</div>
+  </header>`;
+}
+
+
+/* ============ Chat Section ============ */
+const demoMessages = [
+  { type: 'user', content: '帮我写一份关于 AI Agent 框架的调研报告，对比主流的 5-6 个，最后给出我的选型建议。' },
+  { type: 'expert-switch', to: '研究员' },
+  { type: 'assistant', content: '好的，我来帮你做这份调研。我会先用 **deep-research Skill** 检索主流 AI Agent 框架的最新资料，然后整理成对比表和结论报告。\n\n根据你的偏好（之前选择 HTML 单文件报告而非 PPT），我会输出一个可直接打开的 HTML 调研报告。开始执行。' },
+  { type: 'plan', steps: [
+    { text: '检索主流框架最新资料', status: 'done' },
+    { text: '整理技术特性对比表', status: 'active' },
+    { text: '分析社区活跃度和生产案例', status: 'pending' },
+    { text: '结合你的场景给出选型建议', status: 'pending' },
+    { text: '输出 HTML 调研报告', status: 'pending' },
+  ]},
+  { type: 'tool-call', tool: 'skill_invoke', args: '{ "name": "deep-research" }', status: 'done', duration: '42s' },
+  { type: 'tool-call', tool: 'web_search', args: '{ "query": "LangGraph vs CrewAI 2025" }', status: 'done', duration: '8s' },
+  { type: 'tool-call', tool: 'kb_search', args: '{ "query": "Agent 框架选型" }', status: 'done', duration: '0.3s' },
+  { type: 'assistant', content: '资料已收集完毕。现在整理对比维度——你的使用场景是 **个人效率提升 + 数据分析自动化**，这对状态管理和工具生态要求较高。' },
+  { type: 'human-ask', question: '报告详细程度？', options: ['完整报告 + 对比表 (~2500字)', '要点摘要 (~800字)', '两者都要'] },
+];
+
+const artifacts = [
+  { icon: '📄', title: 'AI_Agent_Framework_Report.html', desc: '调研报告', size: '48 KB', tag: 'NEW' },
+  { icon: '📊', title: 'framework_comparison.csv', desc: '对比原始数据', size: '4.2 KB', tag: 'NEW' },
+  { icon: '🔗', title: 'research_sources.json', desc: '来源引用', size: '1.8 KB', tag: '' },
+  { icon: '📝', title: 'notes_from_sources.md', desc: '调研笔记', size: '3.1 KB', tag: '' },
+];
+
+function renderSectionContent(section) {
+  if (section === 'chat') return renderChatView();
+  if (section === 'skills') return renderSkillsView();
+  if (section === 'library') return renderLibraryView();
+  if (section === 'scheduled') return renderScheduledView();
+  if (section === 'settings') return renderSettingsView();
+  if (section === 'phonescreen') return renderPhoneView();
+  if (section === 'plugin') return renderPluginView();
+}
+
+let chatEmpty = false;
+let welcomeMode = 'free'; // 'free' | 'project'
+function renderChatView() {
+  const content = chatEmpty ? renderWelcomePage() : demoMessages.map(renderMessage).join('');
+  return `<div class="flex-1 flex min-w-0 overflow-hidden">
+    <div class="flex-1 overflow-y-auto bg-[hsl(0,0%,97%)]">
+      <div class="max-w-3xl mx-auto px-6 py-6 space-y-6" id="messages-list">
+        ${content}
+      </div>
+    </div>
+    <!-- Artifacts Panel -->
+    <aside class="w-72 shrink-0 border-l border-border bg-white flex flex-col">
+      <div class="border-b border-border px-3 py-2 flex items-center justify-between">
+        <span class="text-xs text-muted-foreground font-medium">新建任务 · 空状态</span>
+        <button onclick="loadTask()" class="text-[11px] text-nexa hover:underline">返回最近任务</button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-4 text-center">
+        <div class="text-xs text-muted-foreground leading-relaxed">
+          在这里选择任务类型后，<br>在下方输入描述即可开始。<br><br>
+          或从左侧点击已有的任务继续执行。
+        </div>
+      </div>
+    </aside>
+  </div>
+  <div class="shrink-0 bg-white px-6 pb-6">
+    <div class="flex items-center gap-1 pt-3 pb-1 flex-wrap">
+      <button class="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-secondary">📎 上传</button>
+      <button class="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-secondary">⚙️ Skill</button>
+      <button class="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-secondary">👤 专家</button>
+      <button class="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-secondary">🔗 连接器</button>
+      <button class="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-secondary">📚 知识库</button>
+    </div>
+    <div class="pt-1">
+      <div class="relative rounded-xl border border-border bg-background focus-within:ring-2 focus-within:ring-nexa/30 transition">
+        <textarea class="w-full resize-none bg-transparent px-4 py-3 pr-12 text-sm placeholder:text-muted-foreground focus:outline-none" rows="3" placeholder="描述你的需求..."></textarea>
+        <button class="absolute bottom-3 right-3 w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <div class="mt-2 text-[11px] text-muted-foreground px-1">
+        任务目录: <code class="font-mono text-foreground/70">~/.nexa/workspaces/4f8a-2c1d/</code>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============ Welcome Page ============ */
+function renderWelcomePage() {
+  const free = welcomeMode === 'free';
+  return `<div class="bg-white rounded-2xl border border-border p-8 fade-in">
+    <div class="text-center mb-6">
+      <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 mb-4 shadow-lg shadow-indigo-500/20">
+        <svg class="w-7 h-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      </div>
+      <h2 class="text-xl font-semibold mb-1">你好，我是 Nexa</h2>
+      <p class="text-sm text-muted-foreground">选择任务类型，然后输入描述就能开始。</p>
+    </div>
+
+    <!-- Mode selection -->
+    <div class="grid grid-cols-2 gap-3 mb-5">
+      <button onclick="toggleWelcomeMode('free')" class="text-left p-4 rounded-xl border-2 transition ${free ? 'border-nexa bg-nexa/5' : 'border-border hover:border-border/70 bg-white'}">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-xl">🎯</span>
+          <span class="text-sm font-semibold">自由任务</span>
+          ${free ? '<span class="ml-auto w-4 h-4 rounded-full bg-nexa flex items-center justify-center text-white text-[10px]">✓</span>' : ''}
+        </div>
+        <div class="text-[11px] text-muted-foreground leading-relaxed">
+          写报告、数据分析、调研、规划...<br>
+          系统自动创建隔离工作区
+          <code class="block mt-1 font-mono text-[10px] text-nexa bg-nexa/10 px-1.5 py-0.5 rounded">~/.nexa/workspaces/&lt;uuid&gt;/</code>
+        </div>
+      </button>
+      <button onclick="toggleWelcomeMode('project')" class="text-left p-4 rounded-xl border-2 transition ${!free ? 'border-nexa bg-nexa/5' : 'border-border hover:border-border/70 bg-white'}">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-xl">💻</span>
+          <span class="text-sm font-semibold">项目编码</span>
+          ${!free ? '<span class="ml-auto w-4 h-4 rounded-full bg-nexa flex items-center justify-center text-white text-[10px]">✓</span>' : ''}
+        </div>
+        <div class="text-[11px] text-muted-foreground leading-relaxed">
+          在已有项目上改代码<br>
+          比如："xxx 目录下帮我加会员能力"
+        </div>
+      </button>
+    </div>
+
+    <!-- Project path selector (only when project mode) -->
+    ${!free ? `<div class="mb-5 p-4 rounded-xl bg-blue-50 border border-blue-100 fade-in">
+      <div class="text-xs font-medium text-blue-700 mb-2 flex items-center gap-1.5">
+        <span>📁</span> 选择要操作的项目目录
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="flex-1 bg-white border border-border rounded-lg px-3 py-2 font-mono text-[12px] text-muted-foreground truncate">
+          /Users/bondli/projects/recipe-app
+        </div>
+        <button class="px-3 py-2 rounded-lg border border-border text-xs hover:bg-secondary">选择目录...</button>
+      </div>
+      <div class="text-[10px] text-blue-600 mt-2 leading-relaxed">
+        Nexa 会扫描这个目录（自动读 AGENTS.md / README.md 等），然后在上面工作。<br>
+        会话删除时不会清理这个目录——你的项目代码安全。
+      </div>
+    </div>` : ''}
+
+    <!-- Prompt hints -->
+    <div class="text-[11px] text-muted-foreground mb-2">试试这些：</div>
+    <div class="flex flex-wrap gap-1.5">
+      ${free
+        ? `<button class="text-[11px] px-2.5 py-1.5 rounded-full border border-border hover:bg-secondary">📝 写一份 AI Agent 框架调研报告</button>
+           <button class="text-[11px] px-2.5 py-1.5 rounded-full border border-border hover:bg-secondary">📊 分析 sales.csv 给出要点</button>
+           <button class="text-[11px] px-2.5 py-1.5 rounded-full border border-border hover:bg-secondary">🗓️ 规划周末杭州两日游</button>`
+        : `<button class="text-[11px] px-2.5 py-1.5 rounded-full border border-border hover:bg-secondary">💡 帮我看下这个项目的结构</button>
+           <button class="text-[11px] px-2.5 py-1.5 rounded-full border border-border hover:bg-secondary">🐛 跑一下测试，修掉报错</button>
+           <button class="text-[11px] px-2.5 py-1.5 rounded-full border border-border hover:bg-secondary">✨ 给用户中心加个 VIP 徽章</button>`
+      }
+    </div>
+
+    <!-- model indicator -->
+    <div class="mt-5 flex items-center justify-between text-[11px] text-muted-foreground pt-4 border-t border-border">
+      <span>默认模型: <code class="font-mono text-foreground">deepseek-chat</code></span>
+      <span>切换专家: <code class="font-mono text-foreground">代码助手</code>（自动）</span>
+    </div>
+  </div>`;
+}
+function toggleWelcomeMode(m) {
+  welcomeMode = m;
+  renderSection();
+}
+
+function renderMessage(m) {
+  const av = '<div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 shrink-0 flex items-center justify-center text-white text-xs font-semibold">N</div>';
+  if (m.type === 'user') return `<div class="flex justify-end fade-in"><div class="max-w-[80%] bg-primary text-primary-foreground px-4 py-2.5 rounded-xl rounded-tr-sm text-[14px] leading-relaxed whitespace-pre-wrap">${m.content}</div></div>`;
+  if (m.type === 'assistant') {
+    const c = m.content.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+    return `<div class="flex gap-3 fade-in">${av}<div class="flex-1 bg-white border border-border rounded-xl rounded-tl-sm px-4 py-3 text-[14px] max-w-[85%] leading-relaxed">${c}</div></div>`;
+  }
+  if (m.type === 'expert-switch') return `<div class="flex gap-3 fade-in">${av}<div class="inline-flex items-center gap-2 bg-white border border-border rounded-full px-3 py-1 text-xs text-muted-foreground self-start">⚡ 自动切换专家 → <span class="font-medium text-foreground">${m.to}</span></div></div>`;
+  if (m.type === 'plan') {
+    const steps = m.steps.map(s => {
+      const icon = s.status === 'done' ? '✓' : s.status === 'active' ? '◉' : '○';
+      const color = s.status === 'done' ? 'text-success' : s.status === 'active' ? 'text-nexa' : 'text-muted-foreground';
+      const bg = s.status === 'done' ? 'bg-success/10' : s.status === 'active' ? 'bg-nexa/10 animate-pulse' : 'bg-muted';
+      const textCls = s.status === 'pending' ? 'text-muted-foreground' : 'text-foreground' + (s.status === 'active' ? ' font-medium' : '');
+      return `<div class="step-line flex items-start gap-3 py-1"><div class="w-4 h-4 rounded-full ${bg} ${color} shrink-0 mt-0.5 text-[9px] font-bold flex items-center justify-center">${icon}</div><span class="text-[13px] ${textCls}">${s.text}</span></div>`;
+    }).join('');
+    return `<div class="flex gap-3 fade-in">${av}<div class="flex-1 max-w-[85%]"><div class="flex items-center gap-2 mb-1"><span class="text-xs font-semibold text-nexa">Agent Plan</span><span class="text-xs text-muted-foreground">· 使用 <code class="font-mono text-[11px] px-1 bg-muted rounded">deep-research</code> Skill</span></div><div class="bg-white border border-border rounded-xl rounded-tl-sm px-4 py-2">${steps}</div></div></div>`;
+  }
+  if (m.type === 'tool-call') {
+    return `<div class="flex gap-3 fade-in">${av}<details class="flex-1 bg-white border border-success/30 rounded-xl rounded-tl-sm max-w-[85%]"><summary class="cursor-pointer px-4 py-2 text-[12px] font-medium flex items-center gap-2 select-none list-none"><span class="text-muted-foreground">Tool ·</span><code class="font-mono text-[12px]">${m.tool}</code><span class="ml-auto text-[11px] text-success">完成</span><span class="text-[11px] text-muted-foreground">· ${m.duration}</span></summary><div class="px-4 pb-3 pt-1 border-t border-border/60"><pre class="text-[11px] font-mono bg-[hsl(222,47%,11%)] text-slate-300 p-2 rounded overflow-x-auto">${m.args}</pre></div></details></div>`;
+  }
+  if (m.type === 'human-ask') {
+    const opts = m.options.map(o => `<button class="px-3 py-2 rounded-lg border border-border bg-white hover:bg-secondary text-sm font-medium text-left transition">${o}</button>`).join('');
+    return `<div class="flex gap-3 fade-in">${av}<div class="flex-1 max-w-[85%]"><div class="flex items-center gap-2 mb-1"><span class="text-xs font-semibold text-warning">⚠️ 需要你确认</span><span class="text-xs text-muted-foreground">· 同步到手机端</span></div><div class="bg-white border border-border rounded-xl rounded-tl-sm px-4 py-3"><p class="text-sm mb-3">${m.question}</p><div class="grid gap-2 max-w-md">${opts}</div></div></div></div>`;
+  }
+}
+
+
+/* ============ Skills Section ============ */
+function renderSkillsView() {
+  const skills = [
+    { name: 'deep-research', desc: '多源深度检索 + 综合分析', count: 23, type: '内置', enabled: true },
+    { name: 'csv-analyzer', desc: 'CSV 解析 + 统计摘要 + 图表', count: 18, type: '内置', enabled: true },
+    { name: 'html-report', desc: '生成精美 HTML 报告', count: 15, type: '内置', enabled: true },
+    { name: 'stocks-analyzer', desc: '股价行情 + 技术面 + 估值', count: 7, type: '内置', enabled: true },
+    { name: 'my-weekly-report', desc: '用户自建 · 周报模板', count: 3, type: '自建', enabled: true },
+    { name: 'meeting-minutes', desc: '用户自建 · 会议纪要', count: 1, type: '自建', enabled: false },
+  ];
+  const experts = [
+    { name: '研究员', desc: '擅长信息检索与长文报告', icon: '🔍', active: true },
+    { name: '代码助手', desc: '写代码 · 调试 · 重构', icon: '💻', active: false },
+    { name: '数据分析员', desc: 'CSV / Excel / 图表', icon: '📊', active: false },
+    { name: '旅行顾问', desc: '行程规划 · 酒店 · 交通', icon: '🧭', active: false },
+  ];
+  const connectors = [
+    { name: '飞书', status: 'connected', calls: 47, type: 'OAuth2' },
+    { name: '行情数据源', status: 'connected', calls: 156, type: 'API Key' },
+    { name: 'Notion', status: 'disconnected', calls: 12, type: 'OAuth2' },
+    { name: 'GitHub', status: 'connected', calls: 8, type: 'OAuth2' },
+  ];
+
+  return `<div class="flex h-full flex-1 min-w-0">
+  <aside class="w-64 shrink-0 bg-white border-r border-border flex flex-col">
+    <div class="h-9 pl-10 pr-1.5 flex items-center border-b border-border shrink-0">
+      
+    </div>
+    <div class="flex-1 overflow-y-auto p-2">
+      <div class="space-y-0.5 mb-1">
+        <button class="w-full text-left px-2 py-1.5 rounded bg-accent text-foreground text-sm font-medium flex items-center gap-2"><span>⚙️</span><span>Skills</span><span class="ml-auto text-xs text-muted-foreground">${skills.length}</span></button>
+        <button class="w-full text-left px-2 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground text-sm font-medium flex items-center gap-2"><span>👤</span><span>专家</span><span class="ml-auto text-xs">${experts.length}</span></button>
+        <button class="w-full text-left px-2 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground text-sm font-medium flex items-center gap-2"><span>🔌</span><span>连接器</span><span class="ml-auto text-xs">${connectors.length}</span></button>
+      </div>
+      <div class="border-t border-border my-2"></div>
+      <div class="space-y-0.5">
+        ${skills.map(s => `<div class="px-2 py-1.5 rounded hover:bg-accent flex items-center gap-2 text-xs">
+          <span class="flex-1 min-w-0 truncate ${s.enabled ? 'text-foreground font-medium' : 'text-muted-foreground'}">${s.name}</span>
+          <span class="text-[10px] text-muted-foreground shrink-0">${s.count}</span>
+          <label class="relative inline-flex items-center shrink-0 cursor-pointer">
+            <input type="checkbox" ${s.enabled ? 'checked' : ''} class="sr-only peer">
+            <div class="w-7 h-3.5 bg-muted rounded-full peer peer-checked:bg-nexa after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:after:translate-x-[14px]"></div>
+          </label>
+        </div>`).join('')}
+      </div>
+    </div>
+  </aside>
+  <div class="flex min-w-0 flex-1 flex-col">
+    <div class="h-16 px-4 flex items-center border-b border-border shrink-0">
+      <h1 class="text-sm font-semibold">技能包</h1>
+    </div>
+    <div class="flex-1 overflow-y-auto p-6">
+      <div class="max-w-5xl mx-auto space-y-10">
+      <section>
+        <div class="flex items-center justify-between mb-4">
+          <div><h2 class="text-base font-semibold">Skills · 能力模块</h2><p class="text-xs text-muted-foreground">Agent 在 plan 阶段按需加载调用</p></div>
+          <button class="text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:opacity-90">+ 新建 Skill</button>
+        </div>
+        <div class="grid gap-3">
+          ${skills.map(s => `
+            <div class="flex items-start gap-3 p-4 rounded-xl border border-border bg-white hover:border-nexa/40 transition">
+              <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-lg shrink-0">⚙️</div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-semibold">${s.name}</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded font-medium ${s.type === '内置' ? 'bg-secondary text-muted-foreground' : 'bg-nexa/10 text-nexa'}">${s.type}</span>
+                  <span class="text-[10px] text-muted-foreground">· 被调用 ${s.count} 次</span>
+                </div>
+                <div class="text-xs text-muted-foreground mt-1">${s.desc}</div>
+              </div>
+              <label class="relative inline-flex items-center shrink-0 cursor-pointer">
+                <input type="checkbox" ${s.enabled ? 'checked' : ''} class="sr-only peer">
+                <div class="w-9 h-5 bg-muted rounded-full peer peer-checked:bg-nexa after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+              </label>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center justify-between mb-4">
+          <div><h2 class="text-base font-semibold">专家 · 角色 + 调度策略 + 工具集</h2><p class="text-xs text-muted-foreground">用户或 Agent 选择后贯穿整个会话</p></div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          ${experts.map(e => `
+            <div class="p-4 rounded-xl border border-border bg-white hover:border-nexa/40 transition">
+              <div class="flex items-start gap-3">
+                <div class="text-2xl">${e.icon}</div>
+                <div class="flex-1">
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold">${e.name}</span>
+                    ${e.active ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-nexa/10 text-nexa font-medium">当前会话</span>' : ''}
+                  </div>
+                  <div class="text-xs text-muted-foreground mt-1">${e.desc}</div>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+
+      <section>
+        <div class="flex items-center justify-between mb-4">
+          <div><h2 class="text-base font-semibold">连接器 · 外部系统接入</h2><p class="text-xs text-muted-foreground">凭据加密存储，仅在 Agent 调用时解密</p></div>
+        </div>
+        <div class="rounded-xl border border-border bg-white overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="bg-secondary"><tr class="text-left text-xs text-muted-foreground">
+              <th class="px-4 py-2 font-medium">连接器</th><th class="px-4 py-2 font-medium">状态</th>
+              <th class="px-4 py-2 font-medium">类型</th><th class="px-4 py-2 font-medium">调用</th><th class="px-4 py-2 font-medium"></th>
+            </tr></thead>
+            <tbody>
+              ${connectors.map(c => `
+                <tr class="border-t border-border hover:bg-secondary/50">
+                  <td class="px-4 py-3 font-medium">${c.name}</td>
+                  <td class="px-4 py-3">${c.status === 'connected'
+                    ? '<span class="inline-flex items-center gap-1 text-xs text-success"><span class="w-1.5 h-1.5 rounded-full bg-success"></span>已连接</span>'
+                    : '<span class="inline-flex items-center gap-1 text-xs text-muted-foreground"><span class="w-1.5 h-1.5 rounded-full bg-muted-foreground"></span>未连接</span>'}</td>
+                  <td class="px-4 py-3 text-xs text-muted-foreground">${c.type}</td>
+                  <td class="px-4 py-3 text-xs">${c.calls}</td>
+                  <td class="px-4 py-3 text-right"><button class="text-xs text-muted-foreground hover:text-foreground px-2">编辑</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+
+/* ============ Library Section ============ */
+/* ============ Library Section (files + notes dual tab) ============ */
+let libraryTab = 'notes'; // default to notes (user's new focus)
+let noteEditor = null;     // null = list view; { id } = editing a note
+let editingDraft = null;   // in-memory draft while editing
+
+const LIBRARY_FILES = [
+  { icon: '📰', label: '文章', title: 'LangGraph vs CrewAI vs AutoGen: 2025 深度对比', tags: ['AI Agent','框架'], summary: '系统对比了三个主流 Agent 框架的架构、状态管理、部署方式...', date: '2 小时前', color: 'bg-blue-50 text-blue-600' },
+  { icon: '📄', label: '文档', title: 'AI_Agent_Framework_Report.html', tags: ['报告'], summary: 'Nexa 生成的调研报告产物', date: '刚刚', color: 'bg-orange-50 text-orange-600' },
+  { icon: '📰', label: '文章', title: 'ReAct 论文精读笔记', tags: ['AI Agent','论文'], summary: 'Reasoning + Acting 范式的原始论文要点', date: '3 天前', color: 'bg-blue-50 text-blue-600' },
+  { icon: '🖼️', label: '图片', title: '灵感收藏 - Agent 架构图', tags: ['灵感','架构'], summary: '来自 Twitter 的 Agent 分层架构图', date: '2 天前', color: 'bg-purple-50 text-purple-600' },
+];
+
+const LIBRARY_CATEGORIES = [
+  { id: 'c1', name: '会议', icon: '📁', preset: true, count: 3 },
+  { id: 'c2', name: '学习', icon: '📁', preset: true, count: 2 },
+  { id: 'c3', name: '工作', icon: '📁', preset: true, count: 4 },
+  { id: 'c4', name: '灵感', icon: '📁', preset: true, count: 2 },
+  { id: 'c5', name: '未分类', icon: '📁', preset: true, count: 1 },
+];
+
+const LIBRARY_NOTES = [
+  { id: 'n1', title: '技术分享会 Q&A', status: 'draft', category: '未分类', tags: ['技术分享','Q&A'], updatedAt: '10 分钟前', content: `## 技术分享会 Q&A\n\n> 分享人：张三 · 时间：2026-10-12\n\n### Q1: Agent 的沙箱隔离怎么实现？\n\n**A1:** 用 Docker 容器 + 只读根文件系统，每个 session 一个容器。共享卷只暴露 workspace 目录。\n\n### Q2: 知识库召回为什么不用 RAG？\n\n**A2:** SQLite 粗筛 + LLM 重排。对个人量级（千-万级）足够，且零 embedding 模型维护成本。\n\n### Q3: 定时任务的边界条件？\n\n**A3:** _(分享人还在整理，等补充)_\n\n### Q4: (待补充)\n\n### Q5: v1 和 v2 的能力边界？\n\n_(整理中)_` },
+  { id: 'n2', title: '产品周会要点', status: 'submitted', category: '会议', tags: ['工作','产品'], updatedAt: '昨天', content: '' },
+  { id: 'n3', title: '评审会议纪要 - finance-tracker 项目', status: 'submitted', category: '会议', tags: ['工作'], updatedAt: '3 天前', content: '' },
+  { id: 'n4', title: 'LangGraph 论文精读', status: 'submitted', category: '学习', tags: ['AI Agent','论文'], updatedAt: '3 天前', content: '' },
+  { id: 'n5', title: '工作流自动化灵感', status: 'submitted', category: '灵感', tags: ['效率'], updatedAt: '5 天前', content: '' },
+  { id: 'n6', title: '旅行 · 杭州两日行程', status: 'submitted', category: '灵感', tags: ['旅行'], updatedAt: '上周', content: '' },
+];
+
+function openNoteEditor(noteId) {
+  const note = LIBRARY_NOTES.find(n => n.id === noteId) || {
+    id: 'new-' + Date.now(),
+    title: '', status: 'draft', category: '未分类', tags: [],
+    updatedAt: '刚刚', content: ''
+  };
+  editingDraft = { ...note };
+  noteEditor = noteId ? { id: noteId } : { id: editingDraft.id, isNew: true };
+  renderSection();
+}
+function closeNoteEditor() {
+  noteEditor = null;
+  editingDraft = null;
+  renderSection();
+}
+function saveNote() {
+  if (!editingDraft.title.trim()) { alert('请先输入标题'); return; }
+  if (noteEditor.isNew) {
+    LIBRARY_NOTES.unshift({ ...editingDraft, status: 'draft', updatedAt: '刚刚' });
+    noteEditor.isNew = false; // now it's an existing note
+  } else {
+    Object.assign(LIBRARY_NOTES.find(n => n.id === editingDraft.id), editingDraft, { updatedAt: '刚刚' });
+  }
+  editingDraft.updatedAt = '刚刚';
+  renderSection();
+}
+function submitNote() {
+  if (!editingDraft.title.trim()) { alert('请先输入标题'); return; }
+  editingDraft.status = 'submitted';
+  saveNote();
+  closeNoteEditor();
+}
+function deleteNote() {
+  if (!confirm('确定删除这条笔记？')) return;
+  const idx = LIBRARY_NOTES.findIndex(n => n.id === editingDraft.id);
+  if (idx >= 0) LIBRARY_NOTES.splice(idx, 1);
+  closeNoteEditor();
+}
+
+/* ------ renderLibraryView orchestrator ------ */
+function renderLibraryView() {
+  // If editor open, show editor + shared top bar
+  if (noteEditor) return renderNoteEditorView();
+
+  return `<div class="flex h-full flex-1 min-w-0">
+  <aside class="w-64 shrink-0 bg-white border-r border-border flex flex-col">
+    <div class="h-9 pl-10 pr-1.5 flex items-center border-b border-border shrink-0">
+      
+    </div>
+    <div class="flex-1 overflow-y-auto p-2">
+      <div class="space-y-0.5 mb-2">
+        <button onclick="switchLibraryTab('files')" class="w-full text-left px-2 py-1.5 rounded text-sm font-medium flex items-center gap-2 transition ${libraryTab==='files'?'bg-accent text-foreground':'hover:bg-accent text-muted-foreground hover:text-foreground'}"><span>�</span><span>文件</span></button>
+        <button onclick="switchLibraryTab('notes')" class="w-full text-left px-2 py-1.5 rounded text-sm font-medium flex items-center gap-2 transition ${libraryTab==='notes'?'bg-accent text-foreground':'hover:bg-accent text-muted-foreground hover:text-foreground'}"><span>📝</span><span>笔记</span></button>
+      </div>
+      <div class="border-t border-border my-2"></div>
+      ${libraryTab === 'notes'
+        ? `<button onclick="openNoteEditor(null)" class="w-full text-left px-2 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground text-xs font-medium flex items-center gap-2"><span class="text-muted-foreground">＋</span><span>新增笔记</span></button>`
+        : `<button class="w-full text-left px-2 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground text-xs font-medium flex items-center gap-2"><span class="text-muted-foreground">＋</span><span>上传文件</span></button>`
+      }
+    </div>
+  </aside>
+  <div class="flex min-w-0 flex-1 flex-col">
+    <div class="h-16 px-4 flex items-center border-b border-border shrink-0 gap-3">
+      <h1 class="text-sm font-semibold">资料库</h1>
+      <div class="flex-1"></div>
+      <div class="relative w-56">
+        <span class="absolute left-2.5 top-2 text-muted-foreground text-sm">🔍</span>
+        <input type="text" placeholder="搜索资料库..." class="w-full pl-8 pr-3 py-1 text-xs border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-nexa/30">
+      </div>
+    </div>
+    <div class="flex-1 flex flex-col min-w-0">
+      ${libraryTab === 'files' ? renderLibraryFilesTab() : renderLibraryNotesTab()}
+    </div>
+  </div>
+</div>`;
+}
+function switchLibraryTab(t) { libraryTab = t; renderSection(); }
+
+/* ------ FILES tab (existing grid view) ------ */
+function renderLibraryFilesTab() {
+  return `
+  <div class="flex-1 flex min-w-0">
+    <aside class="w-56 shrink-0 border-r border-border bg-white p-4 overflow-y-auto">
+      <div class="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase mb-2">类型</div>
+      <div class="space-y-1 mb-5 text-xs">
+        <button class="w-full text-left px-2 py-1.5 rounded bg-nexa/5 text-nexa font-medium flex items-center justify-between"><span>全部</span><span class="text-muted-foreground">24</span></button>
+        <button class="w-full text-left px-2 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground flex items-center justify-between"><span>📰 文章</span><span>9</span></button>
+        <button class="w-full text-left px-2 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground flex items-center justify-between"><span>📄 文档</span><span>3</span></button>
+        <button class="w-full text-left px-2 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground flex items-center justify-between"><span>🖼️ 图片</span><span>5</span></button>
+      </div>
+      <div class="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase mb-2">标签</div>
+      <div class="flex flex-wrap gap-1.5">
+        <span class="text-[11px] px-2 py-0.5 rounded bg-nexa/10 text-nexa font-medium">AI Agent ×3</span>
+        <span class="text-[11px] px-2 py-0.5 rounded bg-secondary text-muted-foreground cursor-pointer">框架 ×2</span>
+        <span class="text-[11px] px-2 py-0.5 rounded bg-secondary text-muted-foreground cursor-pointer">旅行 ×1</span>
+      </div>
+    </aside>
+    <div class="flex-1 overflow-y-auto p-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        ${LIBRARY_FILES.map(it => `
+          <div class="p-4 rounded-xl border border-border bg-white hover:border-nexa/40 hover:shadow-sm transition cursor-pointer">
+            <div class="flex items-start gap-3">
+              <div class="text-2xl shrink-0">${it.icon}</div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-[10px] px-1.5 py-0.5 rounded font-medium ${it.color}">${it.label}</span>
+                  <span class="text-[10px] text-muted-foreground">${it.date}</span>
+                </div>
+                <div class="text-sm font-semibold leading-snug line-clamp-2">${it.title}</div>
+                <div class="text-xs text-muted-foreground mt-1.5 line-clamp-2 leading-relaxed">${it.summary}</div>
+                <div class="flex gap-1.5 mt-2.5 flex-wrap">
+                  ${it.tags.map(t => `<span class="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">#${t}</span>`).join('')}
+                </div>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ------ NOTES tab: category sidebar + grouped list ------ */
+function renderLibraryNotesTab() {
+  // Group notes by category
+  const groups = {};
+  for (const c of LIBRARY_CATEGORIES) groups[c.name] = [];
+  for (const n of LIBRARY_NOTES) {
+    if (!groups[n.category]) groups[n.category] = [];
+    groups[n.category].push(n);
+  }
+
+  return `
+  <div class="flex-1 flex min-w-0">
+    <!-- Category sidebar -->
+    <aside class="w-48 shrink-0 border-r border-border bg-white p-3 overflow-y-auto">
+      <div class="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase mb-2 px-1">分类</div>
+      <div class="space-y-0.5 text-[12.5px]">
+        <button onclick="filterNotesByCategory('all')" class="w-full text-left px-2 py-1.5 rounded bg-nexa/5 text-nexa font-medium flex items-center justify-between">
+          <span class="flex items-center gap-1.5"><span>📝</span> 全部笔记</span>
+          <span class="text-muted-foreground">${LIBRARY_NOTES.length}</span>
+        </button>
+        ${LIBRARY_CATEGORIES.map(c => `
+          <button onclick="filterNotesByCategory('${c.name}')" class="w-full text-left px-2 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground flex items-center justify-between">
+            <span class="flex items-center gap-1.5"><span>${c.icon}</span> ${c.name}</span>
+            <span class="text-muted-foreground">${groups[c.name]?.length ?? 0}</span>
+          </button>
+        `).join('')}
+        <button class="w-full text-left px-2 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground flex items-center gap-1.5 mt-2">
+          <span class="text-muted-foreground">＋</span> 新增分类
+        </button>
+      </div>
+    </aside>
+
+    <!-- Notes list: grouped by category -->
+    <div class="flex-1 overflow-y-auto p-4">
+      ${LIBRARY_CATEGORIES.filter(c => groups[c.name]?.length > 0).map(cat => {
+        const notes = groups[cat.name];
+        const hasDraft = notes.some(n => n.status === 'draft');
+        return `
+        <div class="mb-4">
+          <div class="flex items-center gap-2 mb-2 px-1">
+            <span class="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">${cat.icon} ${cat.name}</span>
+            <span class="text-[10px] text-muted-foreground">${notes.length}</span>
+            ${hasDraft ? '<span class="text-[9px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">含草稿</span>' : ''}
+          </div>
+          <div class="space-y-1">
+            ${notes.map(n => `
+              <button onclick="openNoteEditor('${n.id}')" class="w-full text-left p-3 rounded-lg border border-border bg-white hover:border-nexa/40 hover:shadow-sm transition group">
+                <div class="flex items-center gap-2 mb-1">
+                  ${n.status === 'draft'
+                    ? '<span class="text-[10px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded font-medium">🟡 草稿</span>'
+                    : '<span class="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded font-medium">✅ 已提交</span>'}
+                  <span class="text-[10px] text-muted-foreground">${n.updatedAt}</span>
+                  <span class="text-[10px] text-muted-foreground">· ${n.category}</span>
+                </div>
+                <div class="text-[13.5px] font-semibold leading-snug line-clamp-1">${n.title || '(无标题)'}</div>
+                ${n.content ? `<div class="text-[11.5px] text-muted-foreground mt-1 line-clamp-1 leading-relaxed">${n.content.replace(/[#*>`]/g,'').trim().slice(0,80)}...</div>` : ''}
+                ${n.tags.length ? `<div class="flex gap-1 mt-2 flex-wrap">${n.tags.map(t => `<span class="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">#${t}</span>`).join('')}</div>` : ''}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+        `;
+      }).join('')}
+      ${LIBRARY_NOTES.length === 0 ? '<div class="text-center text-muted-foreground text-sm py-12">还没有笔记 · 点右上角「＋ 新增笔记」开始</div>' : ''}
+    </div>
+  </div>`;
+}
+function filterNotesByCategory(cat) { /* demo only: not wired for brevity */ renderSection(); }
+
+/* ------ NOTE EDITOR view ------ */
+function renderNoteEditorView() {
+  const n = editingDraft;
+  const isDraft = n.status === 'draft';
+  return `
+  <div class="flex-1 flex min-w-0 flex-col">
+    <!-- Header: back + title + status + actions -->
+    <div class="flex items-center gap-3 px-6 py-3 border-b border-border bg-white">
+      <button onclick="closeNoteEditor()" class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-secondary">
+        ← 返回列表
+      </button>
+      <div class="h-4 w-px bg-border"></div>
+      <div class="flex-1 min-w-0 flex items-center gap-2">
+        ${isDraft
+          ? '<span class="text-[10px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded font-medium">🟡 草稿</span>'
+          : '<span class="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded font-medium">✅ 已提交</span>'}
+        <span class="text-[11px] text-muted-foreground">· 更新于 ${n.updatedAt}</span>
+      </div>
+      <button onclick="deleteNote()" class="text-xs text-muted-foreground hover:text-destructive px-3 py-1.5 rounded-lg border border-border hover:bg-secondary transition">🗑️ 删除</button>
+      <button onclick="saveNote()" class="px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-secondary transition">💾 保存草稿</button>
+      <button onclick="submitNote()" class="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition">✅ 提交保存</button>
+    </div>
+
+    <!-- Body: left metadata + right editor -->
+    <div class="flex-1 flex min-w-0 overflow-hidden">
+      <!-- metadata panel -->
+      <aside class="w-56 shrink-0 border-r border-border bg-white p-4 space-y-5 overflow-y-auto">
+        <div>
+          <div class="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase mb-1.5">分类</div>
+          <select onchange="editingDraft.category = this.value" class="w-full text-xs px-2 py-1.5 rounded border border-border focus:outline-none focus:ring-2 focus:ring-nexa/30 bg-white">
+            ${LIBRARY_CATEGORIES.map(c => `<option ${n.category===c.name?'selected':''}>${c.name}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <div class="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase mb-1.5">标签 (逗号分隔)</div>
+          <input onchange="editingDraft.tags = this.value.split(',').map(s=>s.trim()).filter(Boolean)" value="${n.tags.join(', ')}" class="w-full text-xs px-2 py-1.5 rounded border border-border focus:outline-none focus:ring-2 focus:ring-nexa/30">
+        </div>
+        <div>
+          <div class="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase mb-1.5">关联会话 (可选)</div>
+          <select class="w-full text-xs px-2 py-1.5 rounded border border-border bg-white text-muted-foreground focus:outline-none">
+            <option value="">— 不关联 —</option>
+            <option>AI Agent 框架调研报告</option>
+            <option>菜谱小程序 - 会员能力</option>
+          </select>
+        </div>
+        <div class="pt-3 border-t border-border text-[11px] text-muted-foreground leading-relaxed">
+          💡 提示：<br>
+          · 编辑中每 30s 自动保存<br>
+          · 提交前请选择分类<br>
+          · 提交后仍可再编辑
+        </div>
+      </aside>
+
+      <!-- main editor -->
+      <div class="flex-1 overflow-y-auto bg-[hsl(0,0%,97%)]">
+        <div class="max-w-3xl mx-auto py-8 px-8">
+          <input onchange="editingDraft.title = this.value" value="${n.title}" placeholder="输入笔记标题..." class="w-full text-2xl font-bold tracking-tight bg-transparent focus:outline-none border-none placeholder:text-muted-foreground mb-4">
+          <textarea
+            oninput="editingDraft.content = this.value; updateEditorPreview()"
+            id="note-content-ta"
+            placeholder="开始写正文...&#10;&#10;支持 Markdown。比如：&#10;## 问题&#10;### Q1: xxx&#10;**A1:** yyy"
+            class="w-full min-h-[480px] text-[14px] leading-relaxed font-mono bg-white border border-border rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-nexa/30 resize-y placeholder:text-muted-foreground"
+          >${n.content}</textarea>
+          <div id="note-preview" class="mt-4 p-4 rounded-xl border border-border bg-white hidden"></div>
+          <div class="mt-2 flex gap-2">
+            <button onclick="toggleNotePreview()" class="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-secondary">👁️ 切换预览</button>
+            <span class="text-[11px] text-muted-foreground self-center">${n.content.length} 字符</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function toggleNotePreview() {
+  const ta = document.getElementById('note-content-ta');
+  const prev = document.getElementById('note-preview');
+  if (prev.classList.contains('hidden')) {
+    ta.classList.add('hidden');
+    prev.classList.remove('hidden');
+    updateEditorPreview();
+  } else {
+    ta.classList.remove('hidden');
+    prev.classList.add('hidden');
+  }
+}
+function updateEditorPreview() {
+  const ta = document.getElementById('note-content-ta');
+  const prev = document.getElementById('note-preview');
+  if (!prev || !ta) return;
+  const md = ta.value;
+  prev.innerHTML = `<div class="prose prose-sm max-w-none text-[13.5px] leading-relaxed">${
+    md.replace(/^### (.+)$/gm,'<h4 class="font-semibold mt-3 mb-1">▶ $1</h4>')
+      .replace(/^## (.+)$/gm,'<h3 class="font-bold text-base mt-4 mb-2">$1</h3>')
+      .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+      .replace(/^> (.+)$/gm,'<blockquote class="border-l-2 border-nexa/40 pl-3 text-muted-foreground italic text-xs">$1</blockquote>')
+      .replace(/^_(.+)_$/gm,'<em class="text-muted-foreground">$1</em>')
+      .replace(/\n/g,'<br>')
+  }</div>`;
+}
+
+/* Override placeholder so `openNoteEditor(null)` clears title via call above */
+function openNoteEditorNull() { openNoteEditor(null); }
+
+/* ============ Scheduled Section ============ */
+function renderScheduledView() {
+  const jobs = [
+    { desc: '每天 9:00 检查特斯拉股价，异动时通知', cron: '0 9 * * *', nextRun: '明天 09:00', lastRun: '今天 09:00', enabled: true, runs: 47, lastOutput: '特斯拉 262.50 USD, 涨跌 +2.3%' },
+    { desc: '每周五 17:00 整理本周笔记生成周报', cron: '0 17 * * 5', nextRun: '本周五 17:00', lastRun: '上周五', enabled: true, runs: 8, lastOutput: '周报已生成 weekly.html' },
+    { desc: '每小时查看 inbox 新邮件', cron: '0 * * * *', nextRun: '10 分钟后', lastRun: '刚刚', enabled: false, runs: 156, lastError: '连接器 Notion 未连接' },
+  ];
+  return `<div class="flex h-full flex-1 min-w-0">
+  <aside class="w-64 shrink-0 bg-white border-r border-border flex flex-col">
+    <div class="h-9 pl-10 pr-1.5 flex items-center border-b border-border shrink-0">
+      
+    </div>
+    <div class="flex-1 overflow-y-auto p-2">
+      ${jobs.map(j => `<div class="px-2 py-1.5 rounded hover:bg-accent flex items-center gap-2 text-xs">
+        <span class="w-1.5 h-1.5 rounded-full shrink-0 ${j.enabled ? 'bg-success' : 'bg-muted-foreground'}"></span>
+        <div class="flex-1 min-w-0">
+          <div class="truncate ${j.enabled ? 'text-foreground font-medium' : 'text-muted-foreground'}">${j.desc}</div>
+          <div class="text-[10px] text-muted-foreground truncate">下次 ${j.nextRun}</div>
+        </div>
+      </div>`).join('')}
+    </div>
+  </aside>
+  <div class="flex min-w-0 flex-1 flex-col">
+    <div class="h-16 px-4 flex items-center border-b border-border shrink-0">
+      <h1 class="text-sm font-semibold">定时任务</h1>
+      <div class="flex-1"></div>
+      <button class="text-xs px-2.5 py-1 rounded border border-border hover:bg-secondary flex items-center gap-1">↻ 刷新</button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-6">
+      <div class="max-w-4xl mx-auto">
+      <div class="mb-6 p-4 rounded-xl highlight">
+        <div class="flex items-start gap-3">
+          <span class="text-nexa text-lg shrink-0">💡</span>
+          <div class="text-sm leading-relaxed">
+            <div class="font-medium text-nexa">为什么没有"新建"按钮？</div>
+            <div class="text-xs text-muted-foreground mt-0.5">Nexa 不在这里创建定时任务——直接在对话中描述（"每天早上..."、"每周五..."），Agent 会自动识别。这里只负责管理已有任务。</div>
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3 mb-6">
+        <div class="p-4 rounded-xl border border-border bg-white"><div class="text-[11px] text-muted-foreground uppercase font-semibold mb-1">活跃任务</div><div class="text-2xl font-bold">2</div></div>
+        <div class="p-4 rounded-xl border border-border bg-white"><div class="text-[11px] text-muted-foreground uppercase font-semibold mb-1">今日执行</div><div class="text-2xl font-bold">1</div></div>
+        <div class="p-4 rounded-xl border border-border bg-white"><div class="text-[11px] text-muted-foreground uppercase font-semibold mb-1">累计执行</div><div class="text-2xl font-bold">211</div></div>
+      </div>
+      <h2 class="text-sm font-semibold mb-3">已有定时任务</h2>
+      <div class="space-y-3">
+        ${jobs.map(j => `
+          <div class="p-5 rounded-xl border border-border bg-white hover:border-nexa/40 transition">
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded font-medium ${j.enabled ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}">
+                    <span class="w-1.5 h-1.5 rounded-full ${j.enabled ? 'bg-success' : 'bg-muted-foreground'}"></span>${j.enabled ? '运行中' : '已暂停'}
+                  </span>
+                  ${j.lastError ? '<span class="text-[10px] px-2 py-0.5 rounded bg-destructive/10 text-destructive font-medium">⚠️ 最近失败</span>' : ''}
+                </div>
+                <div class="text-[15px] font-semibold leading-snug mb-2">${j.desc}</div>
+                <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
+                  <span><code class="font-mono bg-muted px-1.5 py-0.5 rounded text-[10px]">${j.cron}</code></span>
+                  <span>下次: ${j.nextRun}</span>
+                  <span>上次: ${j.lastRun}</span>
+                  <span>共 ${j.runs} 次</span>
+                </div>
+                ${j.lastOutput ? `<div class="mt-3 text-xs bg-muted rounded-lg px-3 py-1.5 font-mono truncate">${j.lastOutput}</div>` : ''}
+                ${j.lastError ? `<div class="mt-3 text-xs bg-destructive/5 text-destructive rounded-lg px-3 py-1.5 font-mono truncate">${j.lastError}</div>` : ''}
+              </div>
+              <div class="flex flex-col gap-1 shrink-0">
+                <button class="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-secondary">${j.enabled ? '暂停' : '开启'}</button>
+                <button class="text-xs px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/5">删除</button>
+                <button class="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-secondary">立即执行</button>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+
+/* ============ Settings Section ============ */
+function renderSettingsView() {
+  return `<div class="flex h-full flex-1 min-w-0">
+  <aside class="w-64 shrink-0 bg-white border-r border-border flex flex-col">
+    <div class="h-9 pl-10 pr-1.5 flex items-center border-b border-border shrink-0">
+      
+    </div>
+    <div class="flex-1 overflow-y-auto p-2">
+      <div class="space-y-0.5">
+        <button class="w-full text-left px-2 py-1.5 rounded bg-accent text-foreground text-sm font-medium flex items-center gap-2"><span>⚙️</span><span>通用</span></button>
+        <button class="w-full text-left px-2 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground text-sm font-medium flex items-center gap-2"><span>📚</span><span>知识库</span></button>
+        <button class="w-full text-left px-2 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground text-sm font-medium flex items-center gap-2"><span>🧠</span><span>记忆</span></button>
+        <button class="w-full text-left px-2 py-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground text-sm font-medium flex items-center gap-2"><span>📱</span><span>手机配对</span></button>
+      </div>
+    </div>
+  </aside>
+  <div class="flex min-w-0 flex-1 flex-col">
+    <div class="h-16 px-4 flex items-center border-b border-border shrink-0">
+      <h1 class="text-sm font-semibold">设置</h1>
+    </div>
+    <div class="flex-1 overflow-y-auto">
+    <div class="max-w-3xl mx-auto p-6">
+      <h2 class="text-lg font-semibold mb-1">设置</h2>
+      <p class="text-xs text-muted-foreground mb-6">配置模型、存储、显示、手机配对等</p>
+
+      <section class="mb-8">
+        <h3 class="text-sm font-semibold mb-3">🧠 模型配置</h3>
+        <div class="space-y-3">
+          <div class="border border-border rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-3">
+                <div class="w-7 h-7 rounded bg-gradient-to-br from-blue-500 to-cyan-500"></div>
+                <span class="text-sm font-semibold">Deepseek</span>
+                <span class="text-[10px] bg-nexa/10 text-nexa px-1.5 py-0.5 rounded font-medium">默认</span>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" checked class="sr-only peer"><div class="w-9 h-5 bg-muted rounded-full peer peer-checked:bg-nexa after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div></label>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <div><label class="text-[11px] text-muted-foreground mb-1 block">API Key</label><input type="password" value="sk-demo-ds-key" class="w-full border border-border rounded-md px-2 py-1.5 text-xs"></div>
+              <div><label class="text-[11px] text-muted-foreground mb-1 block">Base URL</label><input type="text" value="https://api.deepseek.com/v1" class="w-full border border-border rounded-md px-2 py-1.5 text-xs font-mono"></div>
+              <div><label class="text-[11px] text-muted-foreground mb-1 block">默认模型</label><select class="w-full border border-border rounded-md px-2 py-1.5 text-xs bg-white"><option>deepseek-chat</option></select></div>
+            </div>
+          </div>
+          <div class="border border-border rounded-xl p-4 opacity-50">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-3">
+                <div class="w-7 h-7 rounded bg-gradient-to-br from-green-500 to-emerald-500"></div>
+                <span class="text-sm font-semibold">OpenAI</span>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" class="sr-only peer"><div class="w-9 h-5 bg-muted rounded-full peer peer-checked:bg-nexa after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div></label>
+            </div>
+            <div class="text-xs text-muted-foreground">未配置 API Key</div>
+          </div>
+          <div class="border border-border rounded-xl p-4 opacity-50">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-3">
+                <div class="w-7 h-7 rounded bg-gradient-to-br from-orange-500 to-red-500"></div>
+                <span class="text-sm font-semibold">Anthropic</span>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" class="sr-only peer"><div class="w-9 h-5 bg-muted rounded-full peer peer-checked:bg-nexa after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div></label>
+            </div>
+            <div class="text-xs text-muted-foreground">未配置 API Key</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="mb-8">
+        <h3 class="text-sm font-semibold mb-3">📱 手机配对</h3>
+        <div class="border border-border rounded-xl p-4 flex items-center gap-5">
+          <div class="text-center">
+            <div class="w-20 h-20 bg-white border-2 border-nexa rounded-lg flex items-center justify-center">
+              <div class="grid grid-cols-6 gap-[2px] w-16 h-16">
+                ${Array(36).fill(0).map((_,i) => `<div class="${Math.random() > 0.4 ? 'bg-foreground' : 'bg-transparent'} rounded-sm"></div>`).join('')}
+              </div>
+            </div>
+            <div class="text-[10px] text-muted-foreground mt-2">扫码</div>
+          </div>
+          <div class="flex-1">
+            <div class="text-sm font-medium mb-2">配对码: <code class="font-mono text-lg text-nexa font-bold">A1B2C3</code></div>
+            <div class="text-xs text-muted-foreground mb-3">手机端打开 Nexa → 配对新设备 → 输入码或扫码</div>
+            <div class="flex items-center gap-4 text-xs text-muted-foreground">
+              <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-success"></span>已配对: 1 台</span>
+              <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-success"></span>中继: 腾讯云</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="mb-8">
+        <h3 class="text-sm font-semibold mb-3">💾 存储</h3>
+        <div class="space-y-2">
+          <div class="flex items-center justify-between p-3 rounded-lg bg-muted">
+            <div><div class="font-medium text-xs">工作目录</div><code class="font-mono text-[11px] text-muted-foreground">~/.nexa/workspaces/</code></div>
+            <button class="text-xs text-muted-foreground hover:text-foreground">修改</button>
+          </div>
+          <div class="flex items-center justify-between p-3 rounded-lg bg-muted">
+            <div><div class="font-medium text-xs">资料库</div><code class="font-mono text-[11px] text-muted-foreground">~/.nexa/library/</code></div>
+            <button class="text-xs text-muted-foreground hover:text-foreground">打开</button>
+          </div>
+          <div class="flex items-center justify-between p-3 rounded-lg bg-muted">
+            <div><div class="font-medium text-xs">已用空间</div><div class="text-[11px] text-muted-foreground">28.3 MB</div></div>
+            <button class="text-xs text-muted-foreground hover:text-foreground">清理</button>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h3 class="text-sm font-semibold mb-3">🎨 显示</h3>
+        <div class="space-y-3">
+          <label class="flex items-center justify-between"><span class="text-sm">紧凑模式</span><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" checked class="sr-only peer"><div class="w-9 h-5 bg-muted rounded-full peer peer-checked:bg-nexa after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div></label></label>
+          <label class="flex items-center justify-between"><span class="text-sm">显示 tool call 细节</span><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" class="sr-only peer"><div class="w-9 h-5 bg-muted rounded-full peer peer-checked:bg-nexa after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div></label></label>
+        </div>
+      </section>
+    </div>
+    </div>
+  </div>
+</div>`;
+}
+
+
+/* ============ Phone Screen Section ============ */
+function renderPhoneView() {
+  return `<div class="flex-1 flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-indigo-50 p-8 overflow-y-auto">
+    <div class="flex flex-col items-center">
+      <div class="text-xs text-muted-foreground mb-2 font-medium">📱 手机端（Android · React Native）</div>
+      <div class="w-[240px] h-[490px] bg-black rounded-[38px] p-2 phone-shadow">
+        <div class="w-full h-full bg-white rounded-[30px] overflow-hidden flex flex-col">
+          <div class="h-6 bg-white flex items-center justify-between px-4 text-[10px] font-semibold">
+            <span>9:41</span><span>100%</span>
+          </div>
+          <div class="flex-1 overflow-y-auto p-3 bg-[hsl(0,0%,97%)]">
+            <div class="text-[11px] text-muted-foreground mb-2">Bond 的电脑</div>
+            <div class="flex items-center gap-2 mb-3"><span class="w-1.5 h-1.5 rounded-full bg-success"></span><span class="text-[11px] font-medium text-success">在线</span></div>
+            <div class="bg-white rounded-xl p-3 shadow-sm mb-3">
+              <div class="flex items-center justify-between mb-1.5">
+                <span class="text-[11px] font-semibold">正在执行</span>
+                <span class="text-[9px] bg-nexa/10 text-nexa px-1.5 py-0.5 rounded font-medium animate-pulse">● 60%</span>
+              </div>
+              <div class="text-[13px] font-semibold leading-snug mb-2">AI Agent 框架调研报告</div>
+              <div class="w-full h-1 bg-muted rounded-full overflow-hidden"><div class="w-[60%] h-full bg-nexa rounded-full"></div></div>
+              <button class="w-full mt-2 py-1.5 rounded-lg bg-nexa/10 text-nexa text-[11px] font-medium">查看执行详情 →</button>
+            </div>
+            <div class="bg-warning/10 border border-warning/30 rounded-xl p-3 mb-3">
+              <div class="text-[11px] font-semibold text-warning mb-1.5">⚠️ 需要你确认</div>
+              <div class="text-[11px] text-foreground/80 mb-2">报告详细程度？</div>
+              <div class="space-y-1.5">
+                <button class="w-full text-left text-[11px] bg-white rounded-lg px-2.5 py-1.5 border border-border">✅ 完整报告 + 对比表</button>
+                <button class="w-full text-left text-[11px] bg-white rounded-lg px-2.5 py-1.5 border border-border text-muted-foreground">要点摘要</button>
+              </div>
+            </div>
+            <div class="text-[11px] font-semibold text-muted-foreground mt-4 mb-2">最近完成</div>
+            <div class="space-y-2">
+              <div class="bg-white rounded-lg p-2.5"><div class="flex items-center gap-1 mb-0.5"><span class="text-[9px] bg-success/10 text-success px-1 rounded font-medium">已完成</span><span class="text-[9px] text-muted-foreground">2 小时前</span></div><div class="text-[11px] font-medium">特斯拉股价监控脚本</div></div>
+              <div class="bg-white rounded-lg p-2.5"><div class="flex items-center gap-1 mb-0.5"><span class="text-[9px] bg-success/10 text-success px-1 rounded font-medium">已完成</span><span class="text-[9px] text-muted-foreground">昨天</span></div><div class="text-[11px] font-medium">杭州两日游规划</div></div>
+            </div>
+          </div>
+          <div class="h-12 border-t border-border bg-white flex items-center justify-around text-[9px]">
+            <div class="flex flex-col items-center gap-0.5 text-nexa"><span class="text-sm">💬</span>任务</div>
+            <div class="flex flex-col items-center gap-0.5 text-muted-foreground"><span class="text-sm">📚</span>资料库</div>
+            <div class="flex flex-col items-center gap-0.5 text-muted-foreground"><span class="text-sm">＋</span>新建</div>
+            <div class="flex flex-col items-center gap-0.5 text-muted-foreground"><span class="text-sm">👤</span>我的</div>
+          </div>
+        </div>
+      </div>
+      <div class="text-[10px] text-muted-foreground mt-3">React Native · MMKV 本地缓存 · 腾讯云中继 WebSocket 同步</div>
+      <div class="mt-4 text-xs text-muted-foreground text-center max-w-md leading-relaxed">
+        核心能力: 查看任务 · 续跑执行中任务 · 发起新任务 · 确认决策 · 查看资料库<br>
+        与桌面端通过腾讯云中继建立 WebSocket 双向通道，状态实时同步
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============ Plugin Section ============ */
+function renderPluginView() {
+  return `<div class="flex-1 flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-purple-50 p-8 overflow-y-auto">
+    <div class="flex flex-col items-center">
+      <div class="text-xs text-muted-foreground mb-3 font-medium">🧩 浏览器插件（Chrome MV3）</div>
+      <div class="w-[320px] bg-white rounded-xl border border-border shadow-xl overflow-hidden">
+        <div class="p-3 border-b border-border flex items-center gap-2 bg-gradient-to-br from-indigo-50 to-purple-50">
+          <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">N</div>
+          <div>
+            <div class="text-[13px] font-semibold">Nexa Collector</div>
+            <div class="text-[10px] text-muted-foreground">已连接 Bond 的电脑</div>
+          </div>
+          <div class="ml-auto w-6 h-6 rounded-full bg-success/10 text-success flex items-center justify-center"><span class="w-1.5 h-1.5 rounded-full bg-success"></span></div>
+        </div>
+        <div class="p-3 border-b border-border">
+          <div class="text-[10px] text-muted-foreground mb-1">当前页面</div>
+          <div class="text-[11px] font-medium truncate mb-1">LangGraph vs CrewAI vs AutoGen 2025</div>
+          <div class="text-[10px] text-muted-foreground truncate font-mono">medium.com/@xyz/ai-agent-...</div>
+        </div>
+        <div class="p-3 space-y-2">
+          <button class="w-full flex items-center gap-3 p-2.5 rounded-lg bg-nexa hover:bg-nexa-dark text-white transition">
+            <div class="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">📰</div>
+            <div class="text-left">
+              <div class="text-[12px] font-semibold">采集此页面为文章</div>
+              <div class="text-[10px] opacity-80">正文提取后存入资料库</div>
+            </div>
+          </button>
+          <button class="w-full flex items-center gap-3 p-2.5 rounded-lg border border-border hover:bg-secondary transition">
+            <div class="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center text-base">🖼️</div>
+            <div class="text-left">
+              <div class="text-[12px] font-medium">收藏图片</div>
+              <div class="text-[10px] text-muted-foreground">右键图片 → Nexa 收藏</div>
+            </div>
+          </button>
+          <div class="border-t border-border my-2"></div>
+          <button class="w-full flex items-center gap-3 p-2.5 rounded-lg border border-border hover:bg-secondary transition">
+            <div class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-base">🔍</div>
+            <div class="flex-1 text-left"><div class="text-[12px] font-medium">搜索我的资料库</div></div>
+            <span class="text-[10px] text-muted-foreground">⌘K</span>
+          </button>
+        </div>
+        <div class="px-3 pb-3">
+          <div class="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">最近采集</div>
+          <div class="space-y-1.5">
+            <div class="flex items-center gap-2"><span class="text-xs">📰</span><span class="text-[11px] truncate flex-1">ReAct 论文精读笔记</span><span class="text-[9px] text-muted-foreground">2h</span></div>
+            <div class="flex items-center gap-2"><span class="text-xs">🖼️</span><span class="text-[11px] truncate flex-1">灵感收藏 - Agent 架构图</span><span class="text-[9px] text-muted-foreground">2d</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="text-[10px] text-muted-foreground mt-3">MV3 · Service Worker 中继 · 走腾讯云中继 → 桌面端 Agent</div>
+      <div class="mt-4 text-xs text-muted-foreground text-center max-w-md leading-relaxed">
+        三个核心能力: 采集 URL → 桌面端 Agent 正文提取 → 知识库入库<br>
+        收藏图片: 右键菜单 → 原图上传 → 桌面端存储 + OCR<br>
+        快速搜索: ⌘K 调出本地 Nexa 资料库搜索
+      </div>
+    </div>
+  </div>`;
+}
+
+
+/* ============ Onboarding ============ */
+function showOnboarding() {
+  const m = document.getElementById('onboarding-modal');
+  m.classList.remove('hidden');
+  m.classList.add('flex');
+}
+function closeOnboarding() {
+  const m = document.getElementById('onboarding-modal');
+  m.classList.add('hidden');
+  m.classList.remove('flex');
+}
+
+/* ============ Init ============ */
+renderRail();
+renderRecentTasks();
+navigate('chat');
+</script>
+</body>
+</html>

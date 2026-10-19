@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Nexa 插件配对</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, "Segoe UI", sans-serif; background: #0a0a0a; color: #fafafa; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .card { width: 100%; max-width: 420px; background: #171717; border-radius: 16px; padding: 24px; }
+    h1 { font-size: 20px; margin-bottom: 6px; }
+    p { color: #a3a3a3; font-size: 13px; line-height: 1.6; margin-bottom: 20px; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #d4d4d4; margin-bottom: 6px; }
+    input { width: 100%; background: #262626; color: #fafafa; border: 0; border-radius: 10px; padding: 12px 14px; font-size: 15px; margin-bottom: 16px; outline: none; font-family: monospace; }
+    input:focus { box-shadow: 0 0 0 2px #3b82f6; }
+    button { width: 100%; background: #3b82f6; color: #fff; border: 0; border-radius: 10px; padding: 12px; font-size: 15px; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: 0.6; }
+    .status { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; font-size: 13px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #737373; }
+    .dot.on { background: #22c55e; }
+    .msg { font-size: 13px; margin-top: 12px; min-height: 18px; }
+    .msg.ok { color: #22c55e; }
+    .msg.err { color: #f87171; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>配对 Nexa 桌面端</h1>
+    <p>在桌面端 Nexa「设置 → 手机配对」中生成配对码，填入下方。插件会作为一个已配对设备出现在桌面端列表中。</p>
+    <div class="status">
+      <span id="dot" class="dot"></span>
+      <span id="statusText">未连接</span>
+    </div>
+    <label>中继服务器地址</label>
+    <input id="relayUrl" placeholder="https://relay.example.com" />
+    <label>配对码</label>
+    <input id="code" placeholder="6 位码" maxlength="6" />
+    <button id="pairBtn">配对并连接</button>
+    <div id="msg" class="msg"></div>
+  </div>
+  <script src="options.js"></script>
+</body>
+</html>

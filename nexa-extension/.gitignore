@@ -1,0 +1,26 @@
+# 构建产物
+dist/
+
+# 依赖
+node_modules/
+
+# TypeScript
+*.tsbuildinfo
+
+# 日志
+*.log
+npm-debug.*
+yarn-error.*
+
+# 环境
+.env
+.env*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp

@@ -1,0 +1,19 @@
+{
+  "name": "nexa-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Nexa 中继服务：桌面端与手机端之间的 WebSocket 配对与消息路由",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  }
+}

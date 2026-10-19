@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Nexa 浏览器插件",
+  "version": "0.1.0",
+  "description": "采集网页到 Nexa 资料库、收藏图片、快速搜索",
+  "minimum_chrome_version": "110",
+  "permissions": ["storage", "activeTab", "scripting", "contextMenus", "downloads", "notifications"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Nexa"
+  },
+  "options_page": "options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

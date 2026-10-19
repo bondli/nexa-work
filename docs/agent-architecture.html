@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexa Agent 架构 · Agent Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #bf4520;
+      --font-sans:     'Geist', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', 'Songti SC', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1240px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 1100px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Agent Architecture · Nexa Desktop</p>
+    <h1>Nexa Agent 架构：从 UI 事件到工具执行</h1>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1200 700" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="nexa-agent-arch-title nexa-agent-arch-desc">
+        <title id="nexa-agent-arch-title">Nexa Agent 架构图</title>
+        <desc id="nexa-agent-arch-desc">三层架构：渲染进程经 contextBridge IPC 调用主进程 AgentRuntime，Runtime 组装专家/技能/记忆上下文后驱动 pi-agent-core 循环，循环回调执行文件、技能子进程与连接器工具，全部消息持久化到本地 SQLite 并流式推回 UI。</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+          <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polyline points="0 0, 8 3, 0 6" fill="none" stroke="#4f5d75" stroke-width="1.2"/>
+          </marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+        <!-- ===== Zones（bg → zones → arrows → nodes） ===== -->
+        <!-- Renderer zone -->
+        <rect x="32" y="88" width="264" height="308" rx="8"
+              fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <rect x="108" y="92" width="112" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="164" y="101" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace"
+              text-anchor="middle" letter-spacing="0.14em">RENDERER · 渲染进程</text>
+
+        <!-- Main zone -->
+        <rect x="336" y="88" width="520" height="488" rx="8"
+              fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <rect x="528" y="92" width="136" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="596" y="101" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace"
+              text-anchor="middle" letter-spacing="0.14em">MAIN PROCESS · ELECTRON 主进程</text>
+
+        <!-- Resources zone -->
+        <rect x="896" y="88" width="272" height="488" rx="8"
+              fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <rect x="968" y="92" width="128" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1032" y="101" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace"
+              text-anchor="middle" letter-spacing="0.14em">RESOURCES · 本地与外部</text>
+
+        <!-- ===== Arrows ===== -->
+        <!-- 1. R3 → M1 : IPC invoke -->
+        <path d="M 272,330 H 316 Q 324,330 324,322 V 168 Q 324,160 332,160 H 360"
+              fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <!-- 2. M1 → R3 : AGENT_EVENT 推送（async 虚线） -->
+        <path d="M 360,184 H 300 Q 292,184 292,192 V 312 Q 292,320 284,320 H 272"
+              fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-open)"/>
+        <!-- 3. M1 → M2 -->
+        <line x1="552" y1="160" x2="576" y2="160" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <!-- 4. M2 → pi : runAgentLoop -->
+        <line x1="596" y1="200" x2="596" y2="240" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <!-- 5. pi → X1 : HTTPS 流式 LLM -->
+        <path d="M 776,272 H 840 Q 848,272 848,264 V 164 Q 848,156 856,156 H 920"
+              fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <!-- 6. pi → T2 : executeTool -->
+        <path d="M 596,304 V 320 Q 596,328 588,328 H 543 Q 535,328 535,336"
+              fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <!-- 7. T2 → S2 : 经注册中心解析（虚线） -->
+        <path d="M 520,400 V 424 Q 520,432 512,432 H 476 V 448"
+              fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <!-- 8. T3 → X2 : 连接器 HTTP -->
+        <path d="M 711,368 H 816 Q 824,368 824,360 V 244 Q 824,236 832,236 H 920"
+              fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <!-- 9. T2 → X6 : spawn 子进程（虚线，绕子系统排右侧通道） -->
+        <path d="M 552,400 V 420 Q 560,428 568,428 H 836 Q 844,428 844,436 V 526 Q 844,534 852,534 H 920"
+              fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-open)"/>
+        <!-- 10. M2 → X4 : SQLite 持久化 -->
+        <path d="M 832,184 H 876 Q 884,184 884,192 V 372 Q 884,380 892,380 H 920"
+              fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <!-- 11. T1 → X5 : 文件系统（绕子系统排下方通道） -->
+        <path d="M 360,384 H 352 Q 344,384 344,392 V 556 Q 344,564 352,564 H 896 Q 904,564 904,556 V 462 Q 904,454 912,454 H 920"
+              fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <!-- 12. S6 → X3 : Relay WS -->
+        <path d="M 832,476 H 856 Q 864,476 864,468 V 304 Q 864,296 872,296 H 920"
+              fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+
+        <!-- ===== Arrow labels（paper mask + 6-10px 间隙） ===== -->
+        <rect x="296" y="232" width="56" height="13" rx="2" fill="#f5f5f5"/>
+        <text x="324" y="242" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">INVOKE</text>
+
+        <rect x="260" y="247" width="64" height="13" rx="2" fill="#f5f5f5"/>
+        <text x="292" y="257" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">AGENT_EVENT</text>
+
+        <rect x="610" y="212" width="68" height="13" rx="2" fill="#f5f5f5"/>
+        <text x="644" y="222" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RUN TURN</text>
+
+        <rect x="856" y="202" width="80" height="13" rx="2" fill="#f5f5f5"/>
+        <text x="896" y="212" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">HTTPS STREAM</text>
+
+        <rect x="544" y="310" width="88" height="13" rx="2" fill="#f5f5f5"/>
+        <text x="588" y="320" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">EXECUTE TOOL</text>
+
+        <rect x="478" y="412" width="60" height="13" rx="2" fill="#f5f5f5"/>
+        <text x="508" y="422" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">REGISTRY</text>
+
+        <rect x="832" y="290" width="36" height="13" rx="2" fill="#f5f5f5"/>
+        <text x="850" y="300" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">HTTP</text>
+
+        <rect x="852" y="472" width="48" height="13" rx="2" fill="#f5f5f5"/>
+        <text x="876" y="482" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SPAWN</text>
+
+        <rect x="892" y="278" width="60" height="13" rx="2" fill="#f5f5f5"/>
+        <text x="922" y="288" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SQL PERSIST</text>
+
+        <rect x="616" y="552" width="96" height="13" rx="2" fill="#f5f5f5"/>
+        <text x="664" y="562" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SANDBOXED FS</text>
+
+        <rect x="872" y="376" width="48" height="13" rx="2" fill="#f5f5f5"/>
+        <text x="896" y="386" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">WS</text>
+
+        <!-- ===== Renderer nodes ===== -->
+        <!-- R1 ChatShell -->
+        <rect x="56" y="128" width="216" height="68" rx="6" fill="#f5f5f5"/>
+        <rect x="56" y="128" width="216" height="68" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="64" y="136" width="24" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="76" y="145" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">UI</text>
+        <text x="164" y="162" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">ChatShell · ai-elements</text>
+        <text x="164" y="180" fill="#4f5d75" font-size="8.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">消息气泡 · 工具卡 · 执行计划</text>
+
+        <!-- R2 stores -->
+        <rect x="56" y="212" width="216" height="68" rx="6" fill="#f5f5f5"/>
+        <rect x="56" y="212" width="216" height="68" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="64" y="220" width="40" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="84" y="229" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">STATE</text>
+        <text x="164" y="246" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">zustand stores</text>
+        <text x="164" y="264" fill="#4f5d75" font-size="8.5" font-family="'Geist Mono', monospace" text-anchor="middle">conversation · artifacts · ui · theme</text>
+
+        <!-- R3 preload -->
+        <rect x="56" y="296" width="216" height="68" rx="6" fill="#f5f5f5"/>
+        <rect x="56" y="296" width="216" height="68" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="64" y="304" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="86" y="313" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">BRIDGE</text>
+        <text x="164" y="330" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">preload 安全桥</text>
+        <text x="164" y="348" fill="#4f5d75" font-size="8.5" font-family="'Geist Mono', monospace" text-anchor="middle">window.nexa · contextIsolation</text>
+
+        <!-- ===== Main nodes ===== -->
+        <!-- M1 IPC handlers -->
+        <rect x="360" y="128" width="192" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="360" y="128" width="192" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="368" y="136" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text x="382" y="145" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">IPC</text>
+        <text x="456" y="162" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">IPC Handlers</text>
+        <text x="456" y="179" fill="#4f5d75" font-size="8.5" font-family="'Geist Mono', monospace" text-anchor="middle">ipcMain.handle · 64 通道</text>
+
+        <!-- M2 AgentRuntime（focal） -->
+        <rect x="576" y="120" width="256" height="80" rx="6" fill="#f5f5f5"/>
+        <rect x="576" y="120" width="256" height="80" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1.2"/>
+        <rect x="584" y="128" width="36" height="12" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+        <text x="602" y="137" fill="#bf4520" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CORE</text>
+        <text x="704" y="156" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">AgentRuntime</text>
+        <text x="704" y="173" fill="#4f5d75" font-size="8.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">会话状态 Map · runTurn 事件桥接</text>
+        <text x="704" y="187" fill="#4f5d75" font-size="8.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">systemPrompt 组装 · pause / resume</text>
+
+        <!-- pi-agent-core -->
+        <rect x="416" y="240" width="360" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="416" y="240" width="360" height="64" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <rect x="424" y="248" width="40" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+        <text x="444" y="257" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">LOOP</text>
+        <text x="596" y="274" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">pi-agent-core Agent Loop</text>
+        <text x="596" y="291" fill="#4f5d75" font-size="8.5" font-family="'Geist Mono', monospace" text-anchor="middle">runAgentLoop · Continue · 流式 AgentEvent</text>
+
+        <!-- Tools row -->
+        <!-- T1 -->
+        <rect x="360" y="336" width="109" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="360" y="336" width="109" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="414.5" y="362" fill="#2d3142" font-size="10.5" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">内置工具</text>
+        <text x="414.5" y="379" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">read · write</text>
+        <text x="414.5" y="391" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">edit · bash</text>
+
+        <!-- T2 -->
+        <rect x="481" y="336" width="109" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="481" y="336" width="109" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="535.5" y="362" fill="#2d3142" font-size="10.5" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">skill_run</text>
+        <text x="535.5" y="379" fill="#4f5d75" font-size="8" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">必填校验 · 禁用拒调</text>
+        <text x="535.5" y="391" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">stdin/stdout JSON</text>
+
+        <!-- T3 -->
+        <rect x="602" y="336" width="109" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="602" y="336" width="109" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="656.5" y="362" fill="#2d3142" font-size="10.5" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">connector_call</text>
+        <text x="656.5" y="379" fill="#4f5d75" font-size="8" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">:path 占位符</text>
+        <text x="656.5" y="391" fill="#4f5d75" font-size="8" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">${secret} 解密注入</text>
+
+        <!-- T4 -->
+        <rect x="723" y="336" width="109" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="723" y="336" width="109" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="777.5" y="362" fill="#2d3142" font-size="10.5" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">能力工具</text>
+        <text x="777.5" y="379" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">kb_add / search</text>
+        <text x="777.5" y="391" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">memory · schedule</text>
+
+        <!-- Subsystems row -->
+        <!-- S1 Experts -->
+        <rect x="360" y="448" width="72" height="80" rx="6" fill="#f5f5f5"/>
+        <rect x="360" y="448" width="72" height="80" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="396" y="478" fill="#2d3142" font-size="10" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">Experts</text>
+        <text x="396" y="495" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">专家注册</text>
+        <text x="396" y="508" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">prompt +</text>
+        <text x="396" y="519" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">工具白名单</text>
+
+        <!-- S2 Skills -->
+        <rect x="440" y="448" width="72" height="80" rx="6" fill="#f5f5f5"/>
+        <rect x="440" y="448" width="72" height="80" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="476" y="478" fill="#2d3142" font-size="10" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">Skills</text>
+        <text x="476" y="495" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">yaml 目录</text>
+        <text x="476" y="508" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">.state.json</text>
+        <text x="476" y="519" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">启用态</text>
+
+        <!-- S3 Connectors -->
+        <rect x="520" y="448" width="72" height="80" rx="6" fill="#f5f5f5"/>
+        <rect x="520" y="448" width="72" height="80" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="556" y="478" fill="#2d3142" font-size="10" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">连接器</text>
+        <text x="556" y="495" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">~/.nexa</text>
+        <text x="556" y="508" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">AES-256</text>
+        <text x="556" y="519" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">-GCM 凭据</text>
+
+        <!-- S4 Knowledge -->
+        <rect x="600" y="448" width="72" height="80" rx="6" fill="#f5f5f5"/>
+        <rect x="600" y="448" width="72" height="80" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="636" y="478" fill="#2d3142" font-size="10" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">知识库</text>
+        <text x="636" y="495" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">SQLite 粗筛</text>
+        <text x="636" y="508" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">LLM 重排</text>
+        <text x="636" y="519" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">非 RAG</text>
+
+        <!-- S5 Memory -->
+        <rect x="680" y="448" width="72" height="80" rx="6" fill="#f5f5f5"/>
+        <rect x="680" y="448" width="72" height="80" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="716" y="478" fill="#2d3142" font-size="10" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">记忆引擎</text>
+        <text x="716" y="495" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">profile / state</text>
+        <text x="716" y="508" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">/ preference</text>
+        <text x="716" y="519" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">每 5 轮提取</text>
+
+        <!-- S6 Scheduler · Relay -->
+        <rect x="760" y="448" width="72" height="80" rx="6" fill="#f5f5f5"/>
+        <rect x="760" y="448" width="72" height="80" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="796" y="478" fill="#2d3142" font-size="10" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">调度 · 中继</text>
+        <text x="796" y="495" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">20s cron 轮询</text>
+        <text x="796" y="508" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">RelayClient</text>
+        <text x="796" y="519" fill="#4f5d75" font-size="7.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">事件转发手机</text>
+
+        <!-- ===== Resources nodes ===== -->
+        <!-- X1 LLM providers（external） -->
+        <rect x="920" y="120" width="224" height="72" rx="6" fill="#f5f5f5"/>
+        <rect x="920" y="120" width="224" height="72" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <rect x="928" y="128" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+        <text x="942" y="137" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">LLM</text>
+        <text x="1032" y="158" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">模型服务商</text>
+        <text x="1032" y="176" fill="#4f5d75" font-size="8.5" font-family="'Geist Mono', monospace" text-anchor="middle">DeepSeek · OpenAI · Anthropic</text>
+
+        <!-- X2 外部 HTTP API -->
+        <rect x="920" y="204" width="224" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="920" y="204" width="224" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <rect x="928" y="212" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+        <text x="942" y="221" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">API</text>
+        <text x="1032" y="230" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">外部业务 HTTP API</text>
+        <text x="1032" y="247" fill="#4f5d75" font-size="8.5" font-family="'Geist','PingFang SC',sans-serif" text-anchor="middle">连接器配置的目标端点 · 30s 超时</text>
+
+        <!-- X3 Relay cloud -->
+        <rect x="920" y="272" width="224" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="920" y="272" width="224" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <rect x="928" y="280" width="40" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+        <text x="948" y="289" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">RELAY</text>
+        <text x="1032" y="298" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">Nexa 中继（云端）</text>
+        <text x="1032" y="315" fill="#4f5d75" font-size="8.5" font-family="'Geist Mono', monospace" text-anchor="middle">Express · ws · PM2 · 配对码</text>
+
+        <!-- X4 SQLite（store） -->
+        <rect x="920" y="348" width="224" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="920" y="348" width="224" height="64" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <rect x="928" y="356" width="24" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+        <text x="940" y="365" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DB</text>
+        <text x="1032" y="382" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">本地 SQLite</text>
+        <text x="1032" y="399" fill="#4f5d75" font-size="8.5" font-family="'Geist Mono', monospace" text-anchor="middle">sql.js WASM · 会话/消息/记忆/任务</text>
+
+        <!-- X5 Workspaces（store） -->
+        <rect x="920" y="424" width="224" height="60" rx="6" fill="#f5f5f5"/>
+        <rect x="920" y="424" width="224" height="60" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <rect x="928" y="432" width="24" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+        <text x="940" y="441" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">FS</text>
+        <text x="1032" y="457" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">会话工作目录</text>
+        <text x="1032" y="473" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">~/.nexa/workspaces · 用户项目目录</text>
+
+        <!-- X6 Skill runner subprocess -->
+        <rect x="920" y="496" width="224" height="60" rx="6" fill="#f5f5f5"/>
+        <rect x="920" y="496" width="224" height="60" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <rect x="928" y="504" width="28" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+        <text x="942" y="513" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PROC</text>
+        <text x="1032" y="529" fill="#2d3142" font-size="11" font-weight="600" font-family="'Geist','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">Skill Runner 子进程</text>
+        <text x="1032" y="545" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">ELECTRON_RUN_AS_NODE · 60s/50KB 限制</text>
+
+        <!-- ===== Legend ===== -->
+        <line x1="32" y1="616" x2="1168" y2="616" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <text x="32" y="636" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+
+        <rect x="96" y="628" width="14" height="10" rx="2" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+        <text x="116" y="637" fill="#4f5d75" font-size="8.5" font-family="'Geist','PingFang SC',sans-serif">Agent 核心</text>
+
+        <rect x="196" y="628" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="216" y="637" fill="#4f5d75" font-size="8.5" font-family="'Geist','PingFang SC',sans-serif">UI / 进程内组件</text>
+
+        <rect x="324" y="628" width="14" height="10" rx="2" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="344" y="637" fill="#4f5d75" font-size="8.5" font-family="'Geist','PingFang SC',sans-serif">子系统 / 外部服务</text>
+
+        <rect x="468" y="628" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <text x="488" y="637" fill="#4f5d75" font-size="8.5" font-family="'Geist','PingFang SC',sans-serif">本地存储 / 进程</text>
+
+        <line x1="596" y1="633" x2="624" y2="633" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="632" y="637" fill="#4f5d75" font-size="8.5" font-family="'Geist','PingFang SC',sans-serif">同步调用 / 写入</text>
+
+        <line x1="748" y1="633" x2="776" y2="633" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-open)"/>
+        <text x="784" y="637" fill="#4f5d75" font-size="8.5" font-family="'Geist','PingFang SC',sans-serif">异步事件 / 回流</text>
+
+        <line x1="900" y1="633" x2="928" y2="633" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <text x="936" y="637" fill="#4f5d75" font-size="8.5" font-family="'Geist','PingFang SC',sans-serif">HTTP / WS 网络</text>
+
+        <text x="32" y="668" fill="#5a6580" font-size="9" font-family="'Instrument Serif','Noto Serif',serif" font-style="italic">
+          工具集在每轮 runTurn 时按专家白名单 / 禁用列表实时过滤；记忆块、AGENTS.md 项目上下文、可用 Skills 与连接器清单在 systemPrompt 构建期注入。
+        </text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>
