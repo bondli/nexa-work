@@ -879,6 +879,28 @@ app.whenReady().then(async () => {
             const items = await knowledgeBase.search({ query, topN: 8 })
             return items.map((i) => ({ id: i.id, title: i.title, summary: i.summary, type: i.type }))
           },
+          // 笔记管理（浏览器插件笔记页）
+          noteList: async (params) => {
+            const list = getDatabase().note.list({
+              category: params?.category,
+              search: params?.search,
+            })
+            return { notes: list, total: list.length }
+          },
+          noteGet: async (id) => getDatabase().note.get(id),
+          noteCreate: async (params) =>
+            getDatabase().note.create({
+              id: randomUUID(),
+              title: params.title,
+              content: params.content,
+              category: params.category,
+            }),
+          noteUpdate: async (id, patch) => getDatabase().note.update(id, patch),
+          noteDelete: async (id) => {
+            getDatabase().note.delete(id)
+            return { ok: true }
+          },
+          noteCategories: async () => getDatabase().noteCategory.listWithCount(),
         },
         (status) => {
           if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {

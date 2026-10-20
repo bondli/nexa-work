@@ -1,25 +1,26 @@
 /**
  * nexa-extension 构建脚本
- * - 用 esbuild 把 src/*.ts 编译为 dist/*.js
- * - 拷贝 manifest.json / icons / *.html 到 dist/
- * - 产物 dist/ 可直接在 Chrome「加载已解压的扩展程序」中安装
+ * - esbuild：background (ESM) + options (IIFE)
+ * - Vite：popup / notes（React 页面，需代码分割 + CSS 处理）
+ * - 拷贝 manifest.json / icons / options.html 到 dist/
  *
  * 用法：
  *   node scripts/build.mjs          构建一次
- *   node scripts/build.mjs --watch  监听变更增量构建
+ *   node scripts/build.mjs --watch  监听（仅 esbuild 部分；Vite 一次性跑）
  */
 import { build, context } from "esbuild"
 import { cpSync, rmSync, existsSync } from "node:fs"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
+import { execSync } from "node:child_process"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, "..")
 const DIST = join(ROOT, "dist")
 const WATCH = process.argv.includes("--watch")
 
-/** 需要原样拷贝到 dist 的静态资源 */
-const STATIC_ASSETS = ["manifest.json", "icons", "src/popup.html", "src/options.html"]
+/** 需要原样拷贝到 dist 的静态资源（popup.html / notes.html 由 Vite 产出，不在此列） */
+const STATIC_ASSETS = ["manifest.json", "icons", "src/options.html"]
 
 function clean() {
   if (existsSync(DIST)) rmSync(DIST, { recursive: true, force: true })
@@ -28,11 +29,15 @@ function clean() {
 function copyStatic() {
   for (const asset of STATIC_ASSETS) {
     const src = join(ROOT, asset)
-    // src/popup.html -> dist/popup.html（扁平化，去掉 src/ 前缀，与 manifest 路径对齐）
     const rel = asset.startsWith("src/") ? asset.slice(4) : asset
     const dest = join(DIST, rel)
     cpSync(src, dest, { recursive: true })
   }
+}
+
+function buildReact() {
+  // 调 Vite 构建 React 页面（popup + notes）
+  execSync("npx vite build", { cwd: ROOT, stdio: "inherit" })
 }
 
 const commonBuildOptions = {
@@ -47,12 +52,10 @@ async function run() {
   clean()
 
   if (WATCH) {
-    // 监听模式：背景脚本 + popup + options 同时构建，静态资源每次变更前拷贝
     const ctx = await context({
       ...commonBuildOptions,
       entryPoints: {
         background: join(ROOT, "src/background.ts"),
-        popup: join(ROOT, "src/popup.ts"),
         options: join(ROOT, "src/options.ts"),
       },
       outdir: DIST,
@@ -66,23 +69,33 @@ async function run() {
         },
       ],
     })
-    await ctx.watch()
+    // background 是 ESM，单独再起一个 context
+    const ctxBg = await context({
+      ...commonBuildOptions,
+      entryPoints: [join(ROOT, "src/background.ts")],
+      outfile: join(DIST, "background.js"),
+      format: "esm",
+    })
+    await Promise.all([ctx.watch(), ctxBg.watch()])
+    buildReact()
     console.log("[build] watching for changes...")
   } else {
-    // 一次性构建：background 输出 ESM（manifest 声明 type: module），popup/options 输出 IIFE
+    // background 输出 ESM（manifest 声明 type: module）
     await build({
       ...commonBuildOptions,
       entryPoints: [join(ROOT, "src/background.ts")],
       outfile: join(DIST, "background.js"),
       format: "esm",
     })
+    // options 输出 IIFE
     await build({
       ...commonBuildOptions,
-      entryPoints: [join(ROOT, "src/popup.ts"), join(ROOT, "src/options.ts")],
+      entryPoints: [join(ROOT, "src/options.ts")],
       outdir: DIST,
       format: "iife",
     })
     copyStatic()
+    buildReact()
     console.log(`[build] done → ${DIST}`)
   }
 }

@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 255 255 255;
+  --fg: 23 23 23;
+  --muted: 245 245 245;
+  --muted-fg: 115 115 115;
+  --border: 229 229 229;
+  --primary: 220 38 38;
+  --primary-fg: 255 255 255;
+  --accent: 245 245 245;
+  --accent-fg: 23 23 23;
+  --ring: 220 38 38;
+}
+
+* {
+  border-color: rgb(var(--border));
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply text-sm;
+  background: rgb(var(--bg));
+  color: rgb(var(--fg));
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+}

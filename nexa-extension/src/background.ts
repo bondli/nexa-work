@@ -155,6 +155,28 @@ chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
     sendResponse({ ok: true })
     return false
   }
+  // 通用 RPC 转发（笔记页等使用）：把 method/payload 透传给桌面端 relay
+  if (msg.type === "rpc") {
+    const method = String(msg.method ?? "")
+    if (!method) {
+      sendResponse({ ok: false, error: "method 必填" })
+      return false
+    }
+    void (async () => {
+      try {
+        await relay.ensureConnected()
+        if (!relay.status.peerOnline) {
+          sendResponse({ ok: false, error: "桌面端未连接，请确认桌面端 Nexa 已打开" })
+          return
+        }
+        const data = await relay.call(method, msg.payload, 30_000)
+        sendResponse({ ok: true, data })
+      } catch (e) {
+        sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) })
+      }
+    })()
+    return true
+  }
   return false
 })
 

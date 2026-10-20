@@ -27,6 +27,13 @@ export interface RelayServices {
   ingestArticle(input: { url: string; html?: string; text?: string; title?: string }): Promise<{ ok: boolean; id?: string; title?: string; duplicate?: boolean }>
   favoriteImage(input: { url: string; data: string; mimeType?: string; title?: string; description?: string }): Promise<{ ok: boolean; id?: string }>
   searchLibrary(query: string): Promise<Array<{ id: string; title: string; summary?: string; type: string }>>
+  // 笔记管理（浏览器插件笔记页）
+  noteList(params?: { category?: string; search?: string }): Promise<unknown>
+  noteGet(id: string): Promise<unknown>
+  noteCreate(params: { title: string; content?: string; category?: string }): Promise<unknown>
+  noteUpdate(id: string, patch: { title?: string; content?: string; category?: string }): Promise<unknown>
+  noteDelete(id: string): Promise<{ ok: boolean }>
+  noteCategories(): Promise<unknown>
 }
 
 /** 中继消息信封 */
@@ -411,6 +418,39 @@ export class RelayClient {
           const query = String(msg.payload?.query ?? "").trim()
           if (!query) throw new Error("query 必填")
           await reply(await this.services.searchLibrary(query))
+          return
+        }
+        case "note.list": {
+          const params = msg.payload as { category?: string; search?: string } | undefined
+          await reply(await this.services.noteList(params))
+          return
+        }
+        case "note.get": {
+          const id = String(msg.payload?.id ?? "")
+          if (!id) throw new Error("id 必填")
+          await reply(await this.services.noteGet(id))
+          return
+        }
+        case "note.create": {
+          const { title, content, category } = msg.payload ?? {}
+          if (!title || typeof title !== "string") throw new Error("title 必填")
+          await reply(await this.services.noteCreate({ title, content: content ? String(content) : undefined, category: category ? String(category) : undefined }))
+          return
+        }
+        case "note.update": {
+          const { id, patch } = msg.payload ?? {}
+          if (!id) throw new Error("id 必填")
+          await reply(await this.services.noteUpdate(String(id), patch ?? {}))
+          return
+        }
+        case "note.delete": {
+          const id = String(msg.payload?.id ?? "")
+          if (!id) throw new Error("id 必填")
+          await reply(await this.services.noteDelete(id))
+          return
+        }
+        case "note.categories": {
+          await reply(await this.services.noteCategories())
           return
         }
         default:
