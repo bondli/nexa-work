@@ -24,8 +24,8 @@
  */
 import http from "node:http"
 import { randomBytes } from "node:crypto"
-import express from "express"
-import { WebSocketServer } from "ws"
+import express, { Request, Response } from "express"
+import { WebSocketServer, WebSocket } from "ws"
 import {
   loadStore,
   addPending,
@@ -36,7 +36,8 @@ import {
   findPairingByToken,
   listPairingsByDesktop,
   removePairing,
-} from "./store.js"
+  type ConfirmedPairing,
+} from "./store"
 
 const PORT = Number(process.env.PORT ?? 8787)
 const CODE_TTL_MS = Number(process.env.CODE_TTL_MS ?? 10 * 60 * 1000)
@@ -44,14 +45,25 @@ const HEARTBEAT_MS = 30_000
 /** 配对码字母表：去除易混淆字符 0/O、1/I */
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
+type Role = "desktop" | "phone"
+
+interface Connection {
+  ws: WebSocket
+  role: Role
+  deviceId: string
+  name: string
+  isAlive: boolean
+  token: string | null
+}
+
 loadStore()
 
 const app = express()
 app.use(express.json({ limit: "64kb" }))
 
 // 极简限流：每 IP 每分钟最多 30 次 REST
-const restHits = new Map()
-function rateLimited(ip) {
+const restHits = new Map<string, { start: number; count: number }>()
+function rateLimited(ip: string): boolean {
   const now = Date.now()
   const win = restHits.get(ip)
   if (!win || now - win.start > 60_000) {
@@ -68,7 +80,11 @@ setInterval(() => {
   }
 }, 60_000).unref?.()
 
-app.get("/health", (_req, res) => {
+function nowSec(): number {
+  return Math.floor(Date.now() / 1000)
+}
+
+app.get("/health", (_req: Request, res: Response) => {
   let desktops = 0
   let phones = 0
   for (const conn of connections.values()) {
@@ -82,8 +98,8 @@ app.get("/health", (_req, res) => {
  * 桌面端创建配对码
  * body: { deviceId: string, deviceName?: string }
  */
-app.post("/api/pairing", (req, res) => {
-  if (rateLimited(req.ip)) return res.status(429).json({ error: "请求过于频繁" })
+app.post("/api/pairing", (req: Request, res: Response) => {
+  if (rateLimited(req.ip ?? "")) return res.status(429).json({ error: "请求过于频繁" })
   const deviceId = String(req.body?.deviceId ?? "").trim()
   const deviceName = String(req.body?.deviceName ?? "").trim().slice(0, 64)
   if (!deviceId || deviceId.length > 64) {
@@ -104,60 +120,58 @@ const wss = new WebSocketServer({ server, path: "/ws", maxPayload: 4 * 1024 * 10
 
 /**
  * 连接注册表
- * key = `${role}:${deviceId}` → { ws, role, deviceId, name, isAlive }
+ * key = `${role}:${deviceId}` → Connection
  */
-const connections = new Map()
-const keyOf = (role, deviceId) => `${role}:${deviceId}`
+const connections = new Map<string, Connection>()
+const keyOf = (role: Role, deviceId: string): string => `${role}:${deviceId}`
 
-function getConnection(role, deviceId) {
+function getConnection(role: Role, deviceId: string): Connection | null {
   return connections.get(keyOf(role, deviceId)) ?? null
 }
 
-function nowSec() {
-  return Math.floor(Date.now() / 1000)
-}
-
-function generateCode() {
+function generateCode(): string {
   let code = ""
   const bytes = randomBytes(6)
   for (let i = 0; i < 6; i++) code += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length]
   return code
 }
 
-function generateToken() {
+function generateToken(): string {
   return randomBytes(24).toString("hex")
 }
 
-function send(ws, type, payload = {}, extra = {}) {
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
+
+function send(ws: WebSocket, type: string, payload: Record<string, JsonValue> = {}, extra: Record<string, JsonValue> = {}): void {
   if (ws.readyState !== ws.OPEN) return
   ws.send(JSON.stringify({ type, timestamp: nowSec(), payload, ...extra }))
 }
 
-function sendError(ws, message, refId) {
-  send(ws, "relay:error", { message, ...(refId ? { refId } : {}) })
+function sendError(ws: WebSocket, message: string, refId?: string | number): void {
+  send(ws, "relay:error", { message }, refId !== undefined ? { id: refId as unknown as JsonValue } : {})
 }
 
 // ===== WebSocket 接入 =====
-wss.on("connection", (ws, req) => {
-  let params
+wss.on("connection", (ws: WebSocket, req) => {
+  let params: URLSearchParams
   try {
-    params = new URL(req.url, "http://localhost").searchParams
+    params = new URL(req.url ?? "/", "http://localhost").searchParams
   } catch {
     sendError(ws, "URL 无效"); ws.close(4001); return
   }
 
-  const role = params.get("role")
+  const role = params.get("role") as Role | null
   const deviceId = (params.get("deviceId") ?? "").trim()
   const deviceName = (params.get("name") ?? "").trim().slice(0, 64) || deviceId
 
-  if (!["desktop", "phone"].includes(role) || !deviceId || deviceId.length > 64) {
+  if (!["desktop", "phone"].includes(role ?? "") || !deviceId || deviceId.length > 64) {
     sendError(ws, "role 必须为 desktop/phone，且 deviceId 必填")
     ws.close(4002)
     return
   }
 
   // 手机端鉴权：配对码（首次）或 token（重连）
-  let pairing = null
+  let pairing: ConfirmedPairing | null = null
   if (role === "phone") {
     const code = (params.get("code") ?? "").toUpperCase().trim()
     const token = params.get("token") ?? ""
@@ -192,13 +206,13 @@ wss.on("connection", (ws, req) => {
   }
 
   // 同设备重复连接：踢掉旧连接
-  const connKey = keyOf(role, deviceId)
+  const connKey = keyOf(role!, deviceId)
   const old = connections.get(connKey)
   if (old) {
     try { old.ws.close(4000, "duplicate connection") } catch {}
   }
 
-  const conn = { ws, role, deviceId, name: deviceName, isAlive: true, token: pairing?.token ?? null }
+  const conn: Connection = { ws, role: role!, deviceId, name: deviceName, isAlive: true, token: pairing?.token ?? null }
   connections.set(connKey, conn)
 
   ws.on("pong", () => { conn.isAlive = true })
@@ -209,8 +223,8 @@ wss.on("connection", (ws, req) => {
     handlePhoneConnect(conn, pairing)
   }
 
-  ws.on("message", (raw) => {
-    let msg
+  ws.on("message", (raw: Buffer | ArrayBuffer | Buffer[]) => {
+    let msg: Record<string, JsonValue & Record<string, unknown>>
     try {
       msg = JSON.parse(raw.toString())
     } catch {
@@ -228,7 +242,7 @@ wss.on("connection", (ws, req) => {
   ws.on("error", () => { /* close 会兜底 */ })
 })
 
-function handleDesktopConnect(conn) {
+function handleDesktopConnect(conn: Connection): void {
   const peers = listPairingsByDesktop(conn.deviceId).map((p) => ({
     deviceId: p.phoneId,
     name: p.phoneName,
@@ -239,7 +253,7 @@ function handleDesktopConnect(conn) {
     role: "desktop",
     deviceId: conn.deviceId,
     name: conn.name,
-    paired: peers,
+    paired: peers as unknown as JsonValue,
   })
   // 若有待确认配对码，同步给桌面 UI
   const pending = getPendingByDesktop(conn.deviceId)
@@ -253,7 +267,7 @@ function handleDesktopConnect(conn) {
   }
 }
 
-function handlePhoneConnect(conn, pairing) {
+function handlePhoneConnect(conn: Connection, pairing: ConfirmedPairing): void {
   send(conn.ws, "relay:hello", {
     role: "phone",
     deviceId: conn.deviceId,
@@ -274,7 +288,7 @@ function handlePhoneConnect(conn, pairing) {
   }
 }
 
-function handleDisconnect(conn) {
+function handleDisconnect(conn: Connection): void {
   if (connections.get(keyOf(conn.role, conn.deviceId))?.ws !== conn.ws) return
   connections.delete(keyOf(conn.role, conn.deviceId))
 
@@ -292,13 +306,23 @@ function handleDisconnect(conn) {
   }
 }
 
+interface IncomingMsg {
+  type: string
+  id?: string | number
+  timestamp?: number
+  to?: string
+  payload?: { targetDeviceId?: string; deviceId?: string; [k: string]: unknown }
+  [k: string]: unknown
+}
+
 // ===== 消息处理 =====
-function handleMessage(conn, msg) {
+function handleMessage(conn: Connection, rawMsg: Record<string, unknown>): void {
+  const msg = rawMsg as IncomingMsg
   const type = msg.type
 
   // 系统消息
   if (type === "relay:ping") {
-    send(conn.ws, "relay:pong", {}, { id: msg.id })
+    send(conn.ws, "relay:pong", {}, msg.id !== undefined ? { id: msg.id as unknown as JsonValue } : {})
     return
   }
   if (type === "relay:unbind") {
@@ -313,7 +337,7 @@ function handleMessage(conn, msg) {
         send(phone.ws, "relay:unbound", { reason: "desktop_unpaired" })
         try { phone.ws.close(4000, "unpaired") } catch {}
       }
-      send(conn.ws, "relay:unbound", { deviceId: phoneId }, { id: msg.id })
+      send(conn.ws, "relay:unbound", { deviceId: phoneId }, msg.id !== undefined ? { id: msg.id as unknown as JsonValue } : {})
     } else {
       sendError(conn.ws, "配对关系不存在", msg.id)
     }
@@ -325,7 +349,7 @@ function handleMessage(conn, msg) {
   }
 
   // 业务消息：路由到对端
-  const envelope = () => ({
+  const envelope = (): Record<string, unknown> => ({
     ...msg,
     sender: { deviceId: conn.deviceId, name: conn.name, role: conn.role },
     timestamp: msg.timestamp ?? nowSec(),
@@ -359,7 +383,7 @@ function handleMessage(conn, msg) {
     }
   }
   // 对带 id 的 RPC 请求，若对端全离线，明确告知（避免手机端等待超时）
-  if (delivered === 0 && msg.id) {
+  if (delivered === 0 && msg.id !== undefined) {
     sendError(conn.ws, targetId ? "目标手机离线" : "没有在线的已配对手机", msg.id)
   }
 }

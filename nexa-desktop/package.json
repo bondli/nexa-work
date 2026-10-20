@@ -87,7 +87,8 @@
         }
       ],
       "category": "public.app-category.productivity",
-      "publish": null
+      "publish": null,
+      "icon": "assets/icon.icns"
     },
     "dmg": {
       "contents": [
@@ -103,6 +104,12 @@
         }
       ]
     },
-    "publish": null
+    "publish": null,
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    }
   }
 }
