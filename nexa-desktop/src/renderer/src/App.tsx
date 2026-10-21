@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react"
-import { NavRail } from "@renderer/features/sidebar/nav-rail"
+import { NavRail } from "@renderer/components/nav-rail"
 import { TaskListPanel } from "@renderer/features/chat/task-list-panel"
 import { ChatShell } from "@renderer/features/chat/chat-shell"
-import { ArtifactsPanel } from "@renderer/features/artifacts-panel/artifacts-panel"
+import { ArtifactsPanel } from "@renderer/components/artifacts-panel/artifacts-panel"
 import { SkillPacksPage } from "@renderer/features/skill-packs/skill-packs-page"
 import { ScheduledPage } from "@renderer/features/scheduled/scheduled-page"
 import { LibraryPage } from "@renderer/features/library/library-page"
@@ -50,9 +50,10 @@ export default function App() {
         <>
           <TaskListPanel />
           <ChatShell />
-          <ArtifactsPanel />
         </>
       )}
+      {/* 产物面板抽屉：fixed 定位不占布局，全局挂载（资料库「文档」点击预览同样走这里，仅任务视图挂载会导致点了没反应） */}
+      <ArtifactsPanel />
       {/* 设置全局弹框 */}
       <SettingsDialog />
       {onboarding && <OnboardingDialog onClose={() => setOnboarding(false)} />}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ActivityIndicator,
   Alert,
@@ -11,8 +11,10 @@ import {
   View,
 } from "react-native"
 import { useRouter } from "expo-router"
+import { Ionicons } from "@expo/vector-icons"
 import { CameraView, useCameraPermissions } from "expo-camera"
 import { startRelayWithPairing, useRelayStore } from "@/lib/relay/service"
+import { useTheme } from "@/lib/theme"
 
 const CODE_RE = /^[A-Z0-9]{6}$/
 
@@ -33,6 +35,7 @@ function parsePairPayload(raw: string): { url: string; code: string } | null {
 
 export default function PairScreen() {
   const router = useRouter()
+  const { colors: t } = useTheme()
   const status = useRelayStore((s) => s.status)
 
   const [relayUrl, setRelayUrl] = useState("")
@@ -41,11 +44,11 @@ export default function PairScreen() {
   const [showScanner, setShowScanner] = useState(false)
   const [permission, requestPermission] = useCameraPermissions()
 
-  // 配对成功后跳首页
+  // 配对成功后跳任务首页
   useEffect(() => {
     if (status.peerOnline && connecting) {
       setConnecting(false)
-      router.replace("/home")
+      router.replace("/(tabs)")
     }
   }, [status.peerOnline, connecting, router])
 
@@ -62,6 +65,43 @@ export default function PairScreen() {
       Alert.alert("配对失败", e instanceof Error ? e.message : String(e))
     }
   }, [relayUrl, code])
+
+  // 样式随主题重建（亮/暗切换时自动生效）
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        container: { flex: 1, backgroundColor: t.bg, padding: 20, justifyContent: "center" },
+        center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: t.bg, padding: 24 },
+        card: { backgroundColor: t.card, borderRadius: 16, padding: 20 },
+        title: { color: t.text, fontSize: 22, fontWeight: "700", marginBottom: 6 },
+        subtitle: { color: t.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: 20 },
+        label: { color: t.text, fontSize: 13, fontWeight: "600", marginBottom: 6, marginTop: 4 },
+        input: {
+          backgroundColor: t.border, color: t.text, borderRadius: 10, paddingHorizontal: 14,
+          paddingVertical: 12, fontSize: 15, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+        },
+        codeRow: { flexDirection: "row", gap: 8, alignItems: "center" },
+        codeInput: { flex: 1, letterSpacing: 6, textAlign: "center", fontSize: 20, height: 48 },
+        // marginTop 归零覆盖 .btn 的 16px，固定 48px 高与输入框对齐
+        scanBtn: { paddingHorizontal: 12, marginTop: 0, height: 48, width: 48 },
+        btn: {
+          backgroundColor: t.border, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16,
+          alignItems: "center", justifyContent: "center", marginTop: 16, flexDirection: "row", gap: 8,
+        },
+        primary: { backgroundColor: t.accent },
+        btnDisabled: { opacity: 0.6 },
+        btnText: { color: t.text, fontSize: 15, fontWeight: "600" },
+        // 主按钮（accent 底）文字恒为白色
+        btnTextPrimary: { color: "#fff", fontSize: 15, fontWeight: "600" },
+        linkText: { color: t.accent, fontSize: 14, marginTop: 12, textAlign: "center" },
+        error: { color: t.danger, fontSize: 13, marginTop: 12 },
+        muted: { color: t.textSecondary, fontSize: 14, marginBottom: 16, textAlign: "center" },
+        // 相机取景器上的提示条保持深色遮罩（与主题无关）
+        scanHint: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.7)", padding: 20, alignItems: "center" },
+        scanHintText: { color: "#fafafa", fontSize: 14, marginBottom: 8 },
+      }),
+    [t]
+  )
 
   const onBarcodeScanned = useCallback((result: { data: string }) => {
     const parsed = parsePairPayload(result.data)
@@ -108,7 +148,7 @@ export default function PairScreen() {
       <View style={styles.card}>
         <Text style={styles.title}>配对你的电脑</Text>
         <Text style={styles.subtitle}>
-          在 Nexa 桌面端「设置 → 手机配对」中生成配对码，填入下方即可建立连接。
+          在 Nexa 桌面端「设置 → 手机配对」生成配对码，填入下方即可建立连接
         </Text>
 
         <Text style={styles.label}>中继服务器地址</Text>
@@ -117,7 +157,7 @@ export default function PairScreen() {
           value={relayUrl}
           onChangeText={setRelayUrl}
           placeholder="https://relay.example.com"
-          placeholderTextColor="#737373"
+          placeholderTextColor={t.textMuted}
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="url"
@@ -130,15 +170,17 @@ export default function PairScreen() {
             value={code}
             onChangeText={(t) => setCode(t.toUpperCase().slice(0, 6))}
             placeholder="6 位码"
-            placeholderTextColor="#737373"
+            placeholderTextColor={t.textMuted}
             autoCapitalize="characters"
             autoCorrect={false}
           />
+          {/* 扫码入口：图标按钮，与输入框同高水平对齐 */}
           <Pressable
             style={[styles.btn, styles.scanBtn]}
             onPress={() => setShowScanner(true)}
+            hitSlop={6}
           >
-            <Text style={styles.btnText}>扫码</Text>
+            <Ionicons name="scan-outline" size={22} color={t.text} />
           </Pressable>
         </View>
 
@@ -154,7 +196,7 @@ export default function PairScreen() {
           {connecting ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.btnText}>连接</Text>
+            <Text style={[styles.btnText, styles.btnTextPrimary]}>连接</Text>
           )}
         </Pressable>
       </View>
@@ -162,30 +204,3 @@ export default function PairScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0a0a0a", padding: 20, justifyContent: "center" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0a0a0a", padding: 24 },
-  card: { backgroundColor: "#171717", borderRadius: 16, padding: 20 },
-  title: { color: "#fafafa", fontSize: 22, fontWeight: "700", marginBottom: 6 },
-  subtitle: { color: "#a3a3a3", fontSize: 13, lineHeight: 19, marginBottom: 20 },
-  label: { color: "#d4d4d4", fontSize: 13, fontWeight: "600", marginBottom: 6, marginTop: 4 },
-  input: {
-    backgroundColor: "#262626", color: "#fafafa", borderRadius: 10, paddingHorizontal: 14,
-    paddingVertical: 12, fontSize: 15, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-  },
-  codeRow: { flexDirection: "row", gap: 8, alignItems: "center" },
-  codeInput: { flex: 1, letterSpacing: 6, textAlign: "center", fontSize: 20 },
-  scanBtn: { paddingHorizontal: 16 },
-  btn: {
-    backgroundColor: "#262626", borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16,
-    alignItems: "center", justifyContent: "center", marginTop: 16, flexDirection: "row", gap: 8,
-  },
-  primary: { backgroundColor: "#3b82f6" },
-  btnDisabled: { opacity: 0.6 },
-  btnText: { color: "#fafafa", fontSize: 15, fontWeight: "600" },
-  linkText: { color: "#3b82f6", fontSize: 14, marginTop: 12, textAlign: "center" },
-  error: { color: "#f87171", fontSize: 13, marginTop: 12 },
-  muted: { color: "#a3a3a3", fontSize: 14, marginBottom: 16, textAlign: "center" },
-  scanHint: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.7)", padding: 20, alignItems: "center" },
-  scanHintText: { color: "#fafafa", fontSize: 14, marginBottom: 8 },
-})

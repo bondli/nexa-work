@@ -385,7 +385,8 @@ function SessionRow({
           className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <StatusBadge status={item.status} />
-          <span className="flex-1 truncate text-sm text-sidebar-foreground">{item.title}</span>
+          {/* truncate 省略超长标题，hover 经 title 属性展示全文 */}
+          <span className="flex-1 truncate text-sm text-sidebar-foreground" title={item.title}>{item.title}</span>
         </button>
       )}
       <DropdownMenu>

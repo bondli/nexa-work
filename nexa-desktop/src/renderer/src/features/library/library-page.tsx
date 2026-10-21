@@ -1,8 +1,8 @@
 /**
  * 资料库页面 —— 单列结构: 标题行（右侧搜索框 + 文件/笔记 tab 组） + 全宽内容
  */
-import { useState } from "react"
-import { Search, FileText, StickyNote } from "lucide-react"
+import { useState, useCallback } from "react"
+import { Search, FileText, StickyNote, RefreshCw } from "lucide-react"
 import { PageTitleBar } from "@renderer/components/page-layout"
 import { cn } from "@renderer/lib/utils"
 import { LibraryFilesTab } from "./library-files-tab"
@@ -23,6 +23,16 @@ export function LibraryPage() {
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   /** 是否新建笔记 */
   const [isNewNote, setIsNewNote] = useState(false)
+  /** 手动刷新计数，点击刷新按钮 +1 触发子 tab 重新拉数据 */
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true)
+    setRefreshKey((k) => k + 1)
+    // 给子 tab 一点时间重新加载后清除 loading 态
+    setTimeout(() => setRefreshing(false), 600)
+  }, [])
 
   // 笔记编辑器视图: 保留标题行（拖动 + 页面标题），编辑器占满下方区域
   if (editingNoteId !== null) {
@@ -42,8 +52,16 @@ export function LibraryPage() {
       <PageTitleBar
         title="资料库"
         actions={
-          /* 搜索框 + 分区 tab 组（文件 / 笔记） */
+          /* 刷新按钮 + 搜索框 + 分区 tab 组（文件 / 笔记） */
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              title="刷新资料库"
+              className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
+            </button>
             <div className="relative w-56">
               <Search className="absolute left-2.5 top-1.5 h-3.5 w-3.5 text-muted-foreground" />
               <input
@@ -81,10 +99,11 @@ export function LibraryPage() {
 
       <div className="min-h-0 flex-1">
         {tab === "files" ? (
-          <LibraryFilesTab search={search} />
+          <LibraryFilesTab search={search} refreshKey={refreshKey} />
         ) : (
           <LibraryNotesTab
             search={search}
+            refreshKey={refreshKey}
             onOpenNote={(id) => { setIsNewNote(false); setEditingNoteId(id) }}
             onCreateNote={() => { setIsNewNote(true); setEditingNoteId("new") }}
           />

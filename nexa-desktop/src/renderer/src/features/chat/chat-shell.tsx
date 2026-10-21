@@ -29,7 +29,7 @@ import { cn, formatMessageTime } from "@renderer/lib/utils"
 import { useConversationStore, type ChatMessage, type Conversation, type AgentRunInfo } from "@renderer/stores/conversation-store"
 import { useExpertsStore } from "@renderer/stores/experts-store"
 import { useArtifactsStore } from "@renderer/stores/artifacts-store"
-import { countWorkspaceFiles } from "@renderer/features/artifacts-panel/artifacts-panel"
+import { countWorkspaceFiles } from "@renderer/components/artifacts-panel/artifacts-panel"
 import type { AttachmentInput, ChatAttachment, SkillInfo } from "@shared/ipc-channels"
 
 export function ChatShell() {
@@ -111,96 +111,90 @@ function WelcomeView() {
       {/* 顶部窗口拖动热区（64px） */}
       <div className="drag-bar h-16 shrink-0" />
 
-      {/* 主内容区 */}
-      <div className="flex flex-1 flex-col items-center justify-center gap-8 px-6">
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-            <LogoIcon className="h-9 w-9" />
+      {/* 主内容区：自上而下 图标+Slogan / 任务类型选择 / 输入框（顶部对齐，不垂直居中） */}
+      <div className="flex flex-1 flex-col items-center justify-start px-6 pb-8 pt-4">
+        <div className="flex w-full max-w-4xl flex-col gap-6">
+          {/* 第一行：应用图标 + Slogan（左右结构，图标不带底色） */}
+          <div className="flex items-center gap-3">
+            <LogoIcon className="h-10 w-10 shrink-0 text-foreground" />
+            <p className="text-sm text-muted-foreground">你的智能工作助手，随时待命</p>
           </div>
-          <div className="text-center">
-            <h1 className="text-2xl font-semibold tracking-tight">Nexa</h1>
-            <p className="mt-1 text-sm text-muted-foreground">你的智能工作助手，随时待命</p>
+
+          {/* 第二行：任务类型选择（左右结构） */}
+          <div className="grid w-full grid-cols-2 gap-4">
+            <ModeCard
+              icon={<Terminal className="h-5 w-5" />}
+              title="自由任务"
+              desc={
+                <>
+                  写报告、数据分析、调研、规划…
+                  <br />
+                  系统自动创建隔离工作区
+                  <code className="mt-1 block rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-primary">~/.nexa/workspaces/&lt;uuid&gt;/</code>
+                </>
+              }
+              selected={selectedMode === "free"}
+              onClick={() => handleModeSelect("free")}
+              disabled={loading}
+            />
+            <ModeCard
+              icon={<Bot className="h-5 w-5" />}
+              title="项目编码"
+              desc={
+                <>
+                  在已有项目上改代码
+                  <br />
+                  比如：&quot;xxx 目录下帮我加会员能力&quot;
+                </>
+              }
+              selected={selectedMode === "project"}
+              onClick={() => handleModeSelect("project")}
+              disabled={loading}
+            />
           </div>
-        </div>
 
-        {/* 模式选择（点击仅切换选中，对齐 demo） */}
-        <div className="grid w-full max-w-4xl grid-cols-2 gap-6">
-          <ModeCard
-            icon={<Terminal className="h-5 w-5" />}
-            title="自由任务"
-            desc={
-              <>
-                写报告、数据分析、调研、规划…
-                <br />
-                系统自动创建隔离工作区
-                <code className="mt-1 block rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-primary">~/.nexa/workspaces/&lt;uuid&gt;/</code>
-              </>
-            }
-            selected={selectedMode === "free"}
-            onClick={() => handleModeSelect("free")}
-            disabled={loading}
-          />
-          <ModeCard
-            icon={<Bot className="h-5 w-5" />}
-            title="项目编码"
-            desc={
-              <>
-                在已有项目上改代码
-                <br />
-                比如：&quot;xxx 目录下帮我加会员能力&quot;
-              </>
-            }
-            selected={selectedMode === "project"}
-            onClick={() => handleModeSelect("project")}
-            disabled={loading}
-          />
-        </div>
-
-        {/* 项目目录选择（仅项目编码模式展开，对齐 demo） */}
-        {selectedMode === "project" && (
-          <div className="w-full max-w-4xl rounded-xl border border-border bg-muted/40 p-4">
-            <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-foreground">
-              <FolderOpen className="h-3.5 w-3.5" />
-              选择要操作的项目目录
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 truncate rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs text-muted-foreground">
-                {projectPath ?? "未选择目录"}
+          {/* 项目目录选择（仅项目编码模式展开，对齐 demo） */}
+          {selectedMode === "project" && (
+            <div className="w-full rounded-xl border border-border bg-muted/40 p-4">
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-foreground">
+                <FolderOpen className="h-3.5 w-3.5" />
+                选择要操作的项目目录
               </div>
-              <Button variant="outline" size="sm" onClick={() => void pickDirectory()} disabled={loading}>
-                选择目录...
-              </Button>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 truncate rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs text-muted-foreground">
+                  {projectPath ?? "未选择目录"}
+                </div>
+                <Button variant="outline" size="sm" onClick={() => void pickDirectory()} disabled={loading}>
+                  选择目录...
+                </Button>
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                Nexa 会扫描这个目录（自动读 AGENTS.md / README.md 等），然后在上面工作。
+                <br />
+                会话删除时不会清理这个目录——你的项目代码安全。
+              </p>
             </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-              Nexa 会扫描这个目录（自动读 AGENTS.md / README.md 等），然后在上面工作。
-              <br />
-              会话删除时不会清理这个目录——你的项目代码安全。
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* 底部输入框（固定在页面底部，24px 外边距） */}
-      <div className="shrink-0 px-6 pb-6">
-        <div className="mx-auto w-full max-w-4xl">
-          <InputBar
-            value={text}
-            onChange={setText}
-            onSend={handleSend}
-            loading={loading}
-            placeholder={
-              selectedMode === "project"
-                ? projectPath
-                  ? "描述编码任务（项目目录已选择）…"
-                  : "描述编码任务（请先选择项目目录）…"
-                : "描述你的任务..."
-            }
-            currentExpertId={currentExpertId}
-            defaultSkillId={pendingSkillId}
-          />
-          {error && (
-            <p className="mt-2 text-center text-xs text-red-500">{error}</p>
           )}
+
+          {/* 第三行：输入框 */}
+          <div>
+            <InputBar
+              value={text}
+              onChange={setText}
+              onSend={handleSend}
+              loading={loading}
+              placeholder={
+                selectedMode === "project"
+                  ? projectPath
+                    ? "描述编码任务（项目目录已选择）…"
+                    : "描述编码任务（请先选择项目目录）…"
+                  : "描述你的任务..."
+              }
+              currentExpertId={currentExpertId}
+              defaultSkillId={pendingSkillId}
+            />
+            {error && <p className="mt-2 text-center text-xs text-red-500">{error}</p>}
+          </div>
         </div>
       </div>
     </main>
@@ -1125,6 +1119,13 @@ function UserBubble({ msg }: { msg: ChatMessage }) {
 function AssistantBubble({ msg, showArtifacts }: { msg: ChatMessage; showArtifacts?: boolean }) {
   const sessionId = useConversationStore((s) => s.currentSessionId)
   const hasThinking = Boolean(msg.thinking) || msg.thinkingStreaming === true
+  const timeStr = formatMessageTime(msg.createdAt)
+  const usage = msg.usage
+  /** token 总量：优先 totalTokens，否则 input+output */
+  const totalTokens = usage
+    ? (usage as { totalTokens?: number }).totalTokens ?? (usage.input ?? 0) + (usage.output ?? 0)
+    : 0
+
   return (
     <Message from="assistant">
       <MessageAvatar />
@@ -1148,8 +1149,29 @@ function AssistantBubble({ msg, showArtifacts }: { msg: ChatMessage; showArtifac
             {showArtifacts && sessionId && <ArtifactCards sessionId={sessionId} />}
           </MessageContent>
         )}
+        {/* footer: copy | 消耗 | model | time — done 后才显示 */}
+        {!msg.streaming && msg.content && (
+          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            <CopyButton text={msg.content} />
+            {totalTokens > 0 && (
+              <>
+                <span className="opacity-40">·</span>
+                <span title="本次消耗 tokens">消耗 {totalTokens} tokens</span>
+              </>
+            )}
+            {msg.model && (
+              <>
+                <span className="opacity-40">·</span>
+                <span title="使用的模型">{msg.model}</span>
+              </>
+            )}
+            <span className="opacity-40">·</span>
+            <span className="opacity-0 transition-opacity duration-150 group-hover:opacity-100" title="消息时间">
+              {timeStr}
+            </span>
+          </div>
+        )}
       </div>
-      {!msg.streaming && msg.content && <CopyButton text={msg.content} className="mt-1.5" />}
     </Message>
   )
 }

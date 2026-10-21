@@ -13,7 +13,7 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
-    "pack": "npm run build && electron-builder --mac --dir",
+    "pack": "npm run build && electron-builder --mac --win --publish never",
     "dist": "npm run build && electron-builder --mac"
   },
   "dependencies": {
@@ -81,8 +81,7 @@
         {
           "target": "dmg",
           "arch": [
-            "arm64",
-            "x64"
+            "arm64"
           ]
         }
       ],
@@ -107,8 +106,14 @@
     "publish": null,
     "win": {
       "icon": "assets/icon.ico",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
       "target": [
-        "nsis"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     }
   }

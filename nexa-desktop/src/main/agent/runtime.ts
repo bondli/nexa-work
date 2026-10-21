@@ -92,7 +92,7 @@ function buildAttachmentNote(attachments: ChatAttachment[], model: Model<string>
 const TITLE_SYSTEM_PROMPT = `你是会话标题生成器。用户会给你一段任务描述，其中可能包含 Markdown 结构（## 小标题、列表、代码块等）。
 请只输出一个中文会话标题，规则：
 1. 概括任务的核心意图，不要照抄原文片段
-2. 不超过 12 个字
+2. 不超过 20 个字
 3. 不要出现 Markdown 符号、引号、标点、emoji
 4. 不要"标题："之类前缀，不要解释，只输出标题文本本身
 5. 忽略 Goal / 背景 / 需求 这类结构性小标题，抓住真正的任务内容
@@ -553,6 +553,8 @@ export class AgentRuntime {
               id: currentAssistantId,
               content: text,
               thinking: thinking || undefined,
+              usage: msg.usage,
+              model: `${msg.provider}/${msg.model}`,
             })
           }
           break
@@ -702,7 +704,7 @@ export class AgentRuntime {
     )
     if (!result.ok) return
     // 模型可能忽略约束照抄原文的 Markdown 结构，必须清洗并做有效性校验
-    const title = normalizeTitle(result.value, 12)
+    const title = normalizeTitle(result.value, 20)
     if (!title) return
     this.db.session.rename(state.id, title)
     this.pushEvent({ type: "session.title", sessionId: state.id, title })

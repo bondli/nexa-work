@@ -39,10 +39,12 @@ interface NoteListResponse {
 
 export function LibraryNotesTab({
   search,
+  refreshKey,
   onOpenNote,
   onCreateNote,
 }: {
   search: string
+  refreshKey?: number
   onOpenNote: (id: string) => void
   onCreateNote: () => void
 }) {
@@ -69,7 +71,7 @@ export function LibraryNotesTab({
   useEffect(() => {
     void loadCategories()
     void loadNotes()
-  }, [loadCategories, loadNotes])
+  }, [loadCategories, loadNotes, refreshKey])
 
   // 新增分类对话框状态（window.prompt 在 Electron 被禁用，改用 shadcn Dialog + Input）
   const [catDialogOpen, setCatDialogOpen] = useState(false)

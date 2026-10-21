@@ -11,7 +11,7 @@ if (process.env.NODE_ENV !== "production") {
   app.commandLine.appendSwitch("remote-allow-origins", "*")
 }
 import { IPC, AGENT_EVENT, RELAY_EVENT, NOTIFY_EVENT } from "@shared/ipc-channels"
-import type { AgentEvent, AttachmentInput, ExpertSaveParams, NoticeEvent, SessionCreateParams, WorkspaceFileNode, WorkspaceReadResponse } from "@shared/ipc-channels"
+import type { AgentEvent, AttachmentInput, ExpertSaveParams, NoticeEvent, SessionCreateParams, WorkspaceDocItem, WorkspaceFileNode, WorkspaceReadResponse } from "@shared/ipc-channels"
 import { initDatabase, getDatabase } from "./db/database"
 import type { KnowledgeItem, MemoryItem } from "./db/types"
 import { AgentRuntime } from "./agent/runtime"
@@ -28,6 +28,25 @@ import { computeNextRunSeconds } from "./scheduler/cron"
 import { RelayClient } from "./relay/relay-client"
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url))
+
+/**
+ * 单实例锁：同一时刻只允许运行一个桌面端。
+ * 多开会各自初始化 sql.js（整库读写回同一文件，后写覆盖先写），
+ * 且会用同一个 deviceId 争抢中继连接（手机端因此表现为「一会儿在线一会儿离线」）。
+ */
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  // 拿不到锁说明已有实例在运行，交给已有实例处理（second-instance），本次直接退出
+  app.quit()
+} else {
+  // 重复启动时把已有窗口唤到前台，而不是再开一个窗口
+  app.on("second-instance", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    if (!mainWindow.isVisible()) mainWindow.show()
+    mainWindow.focus()
+  })
+}
 
 /** Agent Runtime 实例（whenReady 后初始化） */
 let agentRuntime: AgentRuntime | null = null
@@ -50,6 +69,89 @@ let relayClient: RelayClient | null = null
 
 /** 主窗口引用 */
 let mainWindow: BrowserWindow | null = null
+
+/** 图片扩展名（工作区文件 / 知识库图片 dataURL 判定共用，模块级常量） */
+const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico"])
+
+/** 产物面板忽略的目录/文件：依赖、版本控制、隐藏文件 */
+const WORKSPACE_IGNORE = new Set([
+  "node_modules", ".git", "dist", "build", "__pycache__", ".venv", "venv",
+  // 系统 / IDE 产物（不需要展示，且通常无需关心）
+  ".DS_Store", "Thumbs.db", ".Spotlight-V100", ".Trashes", ".fseventsd",
+  ".idea", ".vscode", ".next", ".nuxt", ".svelte-kit", ".turbo", ".cache",
+])
+const TEXT_SIZE_LIMIT = 512 * 1024 // 超过 512KB 的文本不读内容
+
+/** 视为「最终产物」的文档类扩展名（产物面板 / 手机端产物卡共用） */
+const DOC_EXTS = new Set([".md", ".markdown", ".html", ".htm"])
+
+/** 校验 rel 在 workspace 内，返回绝对路径 */
+function assertInWorkspace(workspacePath: string, rel: string): string {
+  const abs = resolve(workspacePath, rel)
+  const r = relative(workspacePath, abs)
+  if (r.startsWith("..") || isAbsolute(r)) throw new Error(`路径越界: ${rel}`)
+  return abs
+}
+
+/** 递归列文件树（跳过 node_modules/.git/隐藏目录，深度 5 层，最多 800 项） */
+function listWorkspaceTree(workspacePath: string, rel: string, depth: number, budget: { count: number }): WorkspaceFileNode[] {
+  if (depth > 5 || budget.count > 800) return []
+  const abs = assertInWorkspace(workspacePath, rel || ".")
+  let entries: Dirent[]
+  try {
+    entries = readdirSync(abs, { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const nodes: WorkspaceFileNode[] = []
+  for (const ent of entries.sort((a, b) => (a.isDirectory() === b.isDirectory() ? a.name.localeCompare(b.name) : a.isDirectory() ? -1 : 1))) {
+    if (budget.count > 800) break
+    if (WORKSPACE_IGNORE.has(ent.name)) continue
+    const childRel = rel ? `${rel}/${ent.name}` : ent.name
+    if (ent.isDirectory()) {
+      budget.count++
+      nodes.push({ name: ent.name, path: childRel, type: "directory", children: listWorkspaceTree(workspacePath, childRel, depth + 1, budget) })
+    } else {
+      budget.count++
+      let size: number | undefined
+      try {
+        size = statSync(join(abs, ent.name)).size
+      } catch {
+        /* stat 失败忽略 */
+      }
+      nodes.push({ name: ent.name, path: childRel, type: "file", size })
+    }
+  }
+  return nodes
+}
+
+/** 递归收集 workspace 中产出的文档（md/html），供资料库文档 tab 与手机端产物卡复用 */
+function collectDocs(workspacePath: string, rel: string, depth: number, out: { relPath: string; name: string; mtime: number; size: number }[], budget: { count: number }): void {
+  if (depth > 5 || budget.count > 800 || out.length >= 500) return
+  let entries: Dirent[]
+  try {
+    entries = readdirSync(assertInWorkspace(workspacePath, rel || "."), { withFileTypes: true })
+  } catch {
+    return
+  }
+  for (const ent of entries) {
+    if (budget.count > 800 || out.length >= 500) return
+    if (WORKSPACE_IGNORE.has(ent.name)) continue
+    const childRel = rel ? `${rel}/${ent.name}` : ent.name
+    if (ent.isDirectory()) {
+      budget.count++
+      collectDocs(workspacePath, childRel, depth + 1, out, budget)
+    } else if (DOC_EXTS.has(extname(ent.name).toLowerCase())) {
+      budget.count++
+      try {
+        const st = statSync(join(workspacePath, childRel))
+        out.push({ relPath: childRel, name: ent.name, mtime: Math.floor(st.mtimeMs / 1000), size: st.size })
+      } catch {
+        /* stat 失败忽略 */
+      }
+    }
+  }
+}
 
 /**
  * 创建主窗口
@@ -278,56 +380,6 @@ function registerIpcHandlers(): void {
   })
 
   // ===== 工作区文件（产物面板） =====
-  /** 产物面板忽略的目录/文件：依赖、版本控制、隐藏文件 */
-  const WORKSPACE_IGNORE = new Set([
-    "node_modules", ".git", "dist", "build", "__pycache__", ".venv", "venv",
-    // 系统 / IDE 产物（不需要展示，且通常无需关心）
-    ".DS_Store", "Thumbs.db", ".Spotlight-V100", ".Trashes", ".fseventsd",
-    ".idea", ".vscode", ".next", ".nuxt", ".svelte-kit", ".turbo", ".cache",
-  ])
-  const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico"])
-  const TEXT_SIZE_LIMIT = 512 * 1024 // 超过 512KB 的文本不读内容
-
-  /** 校验 rel 在 workspace 内，返回绝对路径 */
-  function assertInWorkspace(workspacePath: string, rel: string): string {
-    const abs = resolve(workspacePath, rel)
-    const r = relative(workspacePath, abs)
-    if (r.startsWith("..") || isAbsolute(r)) throw new Error(`路径越界: ${rel}`)
-    return abs
-  }
-
-  /** 递归列文件树（跳过 node_modules/.git/隐藏目录，深度 5 层，最多 800 项） */
-  function listWorkspaceTree(workspacePath: string, rel: string, depth: number, budget: { count: number }): WorkspaceFileNode[] {
-    if (depth > 5 || budget.count > 800) return []
-    const abs = assertInWorkspace(workspacePath, rel || ".")
-    let entries: Dirent[]
-    try {
-      entries = readdirSync(abs, { withFileTypes: true })
-    } catch {
-      return []
-    }
-    const nodes: WorkspaceFileNode[] = []
-    for (const ent of entries.sort((a, b) => (a.isDirectory() === b.isDirectory() ? a.name.localeCompare(b.name) : a.isDirectory() ? -1 : 1))) {
-      if (budget.count > 800) break
-      if (WORKSPACE_IGNORE.has(ent.name)) continue
-      const childRel = rel ? `${rel}/${ent.name}` : ent.name
-      if (ent.isDirectory()) {
-        budget.count++
-        nodes.push({ name: ent.name, path: childRel, type: "directory", children: listWorkspaceTree(workspacePath, childRel, depth + 1, budget) })
-      } else {
-        budget.count++
-        let size: number | undefined
-        try {
-          size = statSync(join(abs, ent.name)).size
-        } catch {
-          /* stat 失败忽略 */
-        }
-        nodes.push({ name: ent.name, path: childRel, type: "file", size })
-      }
-    }
-    return nodes
-  }
-
   ipcMain.handle(IPC.WORKSPACE_LIST, async (_e, { sessionId }: { sessionId: string }) => {
     const session = db.session.get(sessionId)
     if (!session) return []
@@ -350,6 +402,25 @@ function registerIpcHandlers(): void {
       return { path, content: null, isImage: false, size: stat.size } satisfies WorkspaceReadResponse
     }
     return { path, content: readFileSync(abs, "utf-8"), isImage: false, size: stat.size } satisfies WorkspaceReadResponse
+  })
+
+  /** 资料库「文档」数据源：递归收集自由任务 workspace 中产出的 md/html 文档（不扫 project 会话——那是用户自己的项目目录） */
+  ipcMain.handle(IPC.WORKSPACE_DOCS_LIST, async (): Promise<WorkspaceDocItem[]> => {
+    // archived 语义：true=只看归档，false/undefined=只看未归档 → 两次调用合并全量
+    // 仅自由任务：project 会话的 workspace 是用户项目目录，不属于"任务产出文档"
+    const sessions = [...db.session.list({ mode: "free" }), ...db.session.list({ mode: "free", archived: true })]
+    const docs: WorkspaceDocItem[] = []
+    for (const s of sessions) {
+      if (!s.workspace_path || !existsSync(s.workspace_path)) continue
+      const found: { relPath: string; name: string; mtime: number; size: number }[] = []
+      collectDocs(s.workspace_path, "", 0, found, { count: 0 })
+      for (const f of found) {
+        docs.push({ sessionId: s.id, sessionTitle: s.title, relPath: f.relPath, name: f.name, mtime: f.mtime, size: f.size })
+      }
+    }
+    // 全局限 200：按修改时间倒序（最新产出在前）
+    docs.sort((a, b) => b.mtime - a.mtime)
+    return docs.slice(0, 200)
   })
 
   // 消息附件读取（仅 ~/.nexa/uploads 内，渲染端展示缩略图用）
@@ -812,6 +883,8 @@ function flog(msg: string): void {
 }
 
 app.whenReady().then(async () => {
+    // 没拿到单实例锁的进程不做任何初始化（app.quit() 在 ready 前不保证立刻生效，这里兜底）
+    if (!gotSingleInstanceLock) return
     flog("whenReady resolved")
     try {
       flog("initializing database...")
@@ -827,18 +900,21 @@ app.whenReady().then(async () => {
       // 手机中继客户端 (M5b)
       relayClient = new RelayClient(
         {
-          createTask: async (prompt, model) => {
+          createTask: async (prompt, model, attachments) => {
             const useModel = model?.trim() || loadSettings().defaultModel
             if (!useModel || !resolveModel(useModel)) {
               throw new Error("桌面端未配置默认模型，请先在 Nexa 设置中选择模型")
             }
-            return createSessionInternal({ initialMessage: prompt, mode: "free", model: useModel })
+            return createSessionInternal({ initialMessage: prompt, mode: "free", model: useModel, attachments })
           },
-          sendMessage: async (sessionId, message) => agentRuntime!.sendMessage(sessionId, message),
+          sendMessage: async (sessionId, message, attachments) =>
+            agentRuntime!.sendMessage(sessionId, message, saveAttachments(sessionId, attachments ?? [])),
           pauseSession: async (sessionId) => agentRuntime!.pause(sessionId),
           resumeSession: async (sessionId) => agentRuntime!.resume(sessionId),
-          listSessions: async () =>
-            getDatabase().session.list({}).map((s) => ({
+          listSessions: async () => {
+            // 未归档 + 归档合并：手机端任务页需要同时展示两类（archived 字段由渲染端分组）
+            const db = getDatabase()
+            return [...db.session.list({}), ...db.session.list({ archived: true })].map((s) => ({
               id: s.id,
               title: s.title,
               mode: s.mode,
@@ -849,8 +925,41 @@ app.whenReady().then(async () => {
               updatedAt: s.updated_at,
               model: s.model,
               archived: s.archived === 1,
+            }))
+          },
+          listMessages: async (sessionId) =>
+            // 手机端无法访问桌面本地路径：图片附件读成 dataUrl 随消息下发；
+            // 单张 >2.5MB 的跳过（dataUrl=null），防止整表回包超中继 4MB 上限
+            getDatabase().message.listBySession(sessionId).map((m) => ({
+              ...m,
+              // 手机端按 runId 关联 agent_runs（任务耗时/工具次数）
+              runId: m.run_id,
+              attachments: (m.attachments ?? []).map((a) => ({
+                name: a.name,
+                mimeType: a.mimeType,
+                dataUrl: (a.size ?? 0) <= 2.5 * 1024 * 1024 ? readAttachmentDataUrl(a.path) : null,
+              })),
             })),
-          listMessages: async (sessionId) => getDatabase().message.listBySession(sessionId),
+          // 手机端任务详情：产物文档列表（与桌面端产物面板同源，仅自由任务 workspace）
+          sessionArtifacts: async (sessionId) => {
+            const session = getDatabase().session.get(sessionId)
+            if (!session?.workspace_path || !existsSync(session.workspace_path)) return []
+            const found: { relPath: string; name: string; mtime: number; size: number }[] = []
+            collectDocs(session.workspace_path, "", 0, found, { count: 0 })
+            return found.sort((a, b) => b.mtime - a.mtime).slice(0, 30)
+          },
+          // 手机端产物预览：md/html 返回文本，其他类型返回大小占位
+          artifactRead: async (sessionId, relPath) => {
+            const session = getDatabase().session.get(sessionId)
+            if (!session?.workspace_path) throw new Error("会话不存在")
+            const abs = assertInWorkspace(session.workspace_path, relPath)
+            const stat = statSync(abs)
+            if (!stat.isFile()) throw new Error("不是文件")
+            if (stat.size > TEXT_SIZE_LIMIT) return { path: relPath, content: null, size: stat.size }
+            return { path: relPath, content: readFileSync(abs, "utf-8"), size: stat.size }
+          },
+          // 手机端任务轨迹：agent_runs（任务耗时 / 工具调用次数 / 状态）
+          sessionRuns: async (sessionId) => getDatabase().agentRun.listBySession(sessionId),
           // 浏览器插件（M6）
           ingestArticle: async ({ url, html, text, title }) => {
             if (!knowledgeBase) throw new Error("知识库未初始化")
@@ -901,6 +1010,37 @@ app.whenReady().then(async () => {
             return { ok: true }
           },
           noteCategories: async () => getDatabase().noteCategory.listWithCount(),
+          // 手机端定时任务页
+          scheduleList: async () => getDatabase().scheduledJob.listAll(),
+          scheduleRuns: async (jobId, limit) => getDatabase().jobRun.listByJob(jobId, limit ?? 50),
+          // 手机端资料页：知识库条目（文章/图片/文档）列表与详情
+          libraryList: async () => ({ items: getDatabase().knowledge.list({ limit: 200 }) }),
+          libraryGet: async (id) => {
+            const item = getDatabase().knowledge.get(id)
+            if (!item) return null
+            // 正文存放在 file_path 文件中（图片除外），读取后一并下发
+            let content: string | null = null
+            let dataUrl: string | null = null
+            if (item.type === "image" && item.file_path && existsSync(item.file_path)) {
+              // 图片：读原图转 dataURL 下发，手机端直接渲染
+              const ext = extname(item.file_path).toLowerCase()
+              if (IMAGE_EXTS.has(ext)) {
+                try {
+                  const buf = readFileSync(item.file_path)
+                  dataUrl = `data:image/${ext.slice(1)};base64,${buf.toString("base64")}`
+                } catch {
+                  dataUrl = null
+                }
+              }
+            } else if (item.type !== "image" && item.file_path && existsSync(item.file_path)) {
+              try {
+                content = readFileSync(item.file_path, "utf-8")
+              } catch {
+                content = null
+              }
+            }
+            return { ...item, content, dataUrl }
+          },
         },
         (status) => {
           if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {

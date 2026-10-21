@@ -24,6 +24,29 @@ function pairingDeepLink(relayUrl: string, code: string): string {
   return `nexa://pair?url=${encodeURIComponent(relayUrl)}&code=${code}`
 }
 
+/**
+ * 配对码剩余有效时间
+ * 倒计时必须独立成组件：若把计时器放在 RelayPairingTab 里，整页每 500ms 重渲染一次，
+ * 会连带中继地址输入框一起重渲染，输入时表现为输入框闪烁。
+ */
+function PairingCountdown({ expiresAt }: { expiresAt: number }) {
+  const calc = () => Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))
+  const [remain, setRemain] = useState(calc)
+
+  useEffect(() => {
+    setRemain(calc())
+    const timer = setInterval(() => setRemain(calc()), 1000)
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expiresAt])
+
+  return (
+    <>
+      {Math.floor(remain / 60)}:{String(remain % 60).padStart(2, "0")} 后失效
+    </>
+  )
+}
+
 /** 非本机地址的明文 HTTP 视为不安全（生产环境应使用 HTTPS / wss） */
 function isInsecureHttp(url: string): boolean {
   try {
@@ -50,7 +73,6 @@ export function RelayPairingTab() {
   const [pairError, setPairError] = useState<string | null>(null)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const [, forceTick] = useState(0)
   const subscribedRef = useRef(false)
 
   const refresh = useCallback(async () => {
@@ -76,14 +98,9 @@ export function RelayPairingTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 配对码倒计时
+  // 配对码过期后清掉二维码（倒计时由 PairingCountdown 自行驱动，不触发本组件重渲染）
   useEffect(() => {
-    if (!status?.pendingPairing) {
-      setQrDataUrl(null)
-      return
-    }
-    const timer = setInterval(() => forceTick((n) => n + 1), 500)
-    return () => clearInterval(timer)
+    if (!status?.pendingPairing) setQrDataUrl(null)
   }, [status?.pendingPairing])
 
   // 生成二维码
@@ -173,7 +190,6 @@ export function RelayPairingTab() {
   /** 当前已保存的中继地址是否为非本机明文 HTTP（常驻安全提示，切到 HTTPS 会自动消失） */
   const insecureRelay = isInsecureHttp(status?.relayUrl ?? "")
   const pending = status?.pendingPairing ?? null
-  const remainSec = pending ? Math.max(0, Math.floor((pending.expiresAt - Date.now()) / 1000)) : 0
   const paired = status?.paired ?? []
 
   return (
@@ -248,7 +264,7 @@ export function RelayPairingTab() {
             请先保存并连接中继服务器，再生成配对码。
           </p>
         )}
-        {connected && pending && remainSec > 0 && (
+        {connected && pending && (
           <div className="flex items-start gap-4">
             <div className="flex flex-col items-center gap-1">
               {qrDataUrl ? (
@@ -272,7 +288,7 @@ export function RelayPairingTab() {
                 </button>
               </div>
               <div className="mt-1 text-[11px] text-muted-foreground">
-                {Math.floor(remainSec / 60)}:{String(remainSec % 60).padStart(2, "0")} 后失效
+                <PairingCountdown expiresAt={pending.expiresAt} />
               </div>
               <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
                 手机与电脑需连接同一个中继服务器。配对成功后此处会出现设备，可随时解绑。

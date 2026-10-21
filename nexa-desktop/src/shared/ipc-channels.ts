@@ -21,6 +21,7 @@ export const IPC = {
   OPEN_DIRECTORY_PICKER: "agent:open-directory-picker",
   WORKSPACE_LIST: "agent:workspace.list",
   WORKSPACE_READ: "agent:workspace.read",
+  WORKSPACE_DOCS_LIST: "agent:workspace.docs.list",
   ARTIFACT_PREVIEW_BASE: "agent:workspace.preview-base",
   ATTACHMENT_READ: "agent:attachment.read",
 
@@ -355,6 +356,20 @@ export interface WorkspaceReadResponse {
   size: number
 }
 
+/** workspace.docs.list 返回：自由任务 workspace 中产出的文档（md/html） */
+export interface WorkspaceDocItem {
+  sessionId: string
+  /** 会话标题（文档来源任务） */
+  sessionTitle: string
+  /** 相对 workspace 根的路径 */
+  relPath: string
+  /** 文件名 */
+  name: string
+  /** 修改时间（unix 秒） */
+  mtime: number
+  size: number
+}
+
 // ===== Agent 事件类型 (主进程推送) =====
 export type AgentEvent =
   | { type: "session.created"; sessionId: string; title: string; mode: SessionMode }
@@ -374,7 +389,7 @@ export type AgentEvent =
   | { type: "message.user"; sessionId: string; id: string; content: string; ts: number; attachments?: ChatAttachment[] }
   | { type: "message.thinking.delta"; sessionId: string; id: string; delta: string }
   | { type: "message.assistant.delta"; sessionId: string; id: string; delta: string }
-  | { type: "message.assistant.done"; sessionId: string; id: string; content: string; thinking?: string }
+  | { type: "message.assistant.done"; sessionId: string; id: string; content: string; thinking?: string; usage?: { input?: number; output?: number; totalTokens?: number }; model?: string }
   | { type: "plan.created"; sessionId: string; steps: PlanStep[] }
   | {
       type: "plan.step.update"

@@ -9,7 +9,7 @@
       "typedRoutes": true
     },
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true
     },
@@ -18,8 +18,7 @@
       "adaptiveIcon": {
         "backgroundColor": "#0a0a0a",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundImage": "./assets/android-icon-background.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -31,9 +30,38 @@
       "expo-status-bar",
       "expo-secure-store",
       [
+        "expo-notifications",
+        {
+          "color": "#3b82f6",
+          "defaultChannel": "nexa-task",
+          "sounds": []
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "允许 Nexa 使用相机扫描桌面端配对二维码"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#0a0a0a",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#0a0a0a"
+          }
+        }
+      ],
+      "expo-audio",
+      "expo-system-ui",
+      [
+        "expo-navigation-bar",
+        {
+          "enforceContrast": false
         }
       ]
     ]

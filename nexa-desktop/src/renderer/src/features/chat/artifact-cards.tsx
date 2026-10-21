@@ -4,7 +4,7 @@
  */
 import { useEffect, useMemo } from "react"
 import { useArtifactsStore } from "@renderer/stores/artifacts-store"
-import { FileIconFor } from "@renderer/features/artifacts-panel/artifacts-panel"
+import { FileIconFor } from "@renderer/components/artifacts-panel/artifacts-panel"
 import type { WorkspaceFileNode } from "@shared/ipc-channels"
 
 /** 视为「最终产物」的文档类扩展名 */

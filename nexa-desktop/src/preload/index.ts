@@ -61,6 +61,10 @@ const api = {
   workspaceRead: (sessionId: string, path: string) =>
     ipcRenderer.invoke(IPC.WORKSPACE_READ, { sessionId, path }),
 
+  /** 自由任务 workspace 产出的文档列表（资料库「文档」数据源） */
+  workspaceDocsList: () =>
+    ipcRenderer.invoke(IPC.WORKSPACE_DOCS_LIST),
+
   /** 产物 HTML 预览静态服务地址（127.0.0.1 随机端口） */
   getArtifactPreviewBase: () =>
     ipcRenderer.invoke(IPC.ARTIFACT_PREVIEW_BASE),

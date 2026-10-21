@@ -15,6 +15,8 @@ import {
   DialogFooter,
 } from "@renderer/components/ui/dialog"
 import { cn, timeAgo } from "@renderer/lib/utils"
+import { useArtifactsStore } from "@renderer/stores/artifacts-store"
+import type { WorkspaceDocItem } from "@shared/ipc-channels"
 
 interface KbItem {
   id: string
@@ -39,23 +41,29 @@ function typeMeta(type: string): { label: string; icon: typeof FileText; cls: st
   return TYPE_META[type] ?? { label: type, icon: FileText, cls: "bg-muted text-muted-foreground" }
 }
 
-export function LibraryFilesTab({ search }: { search: string }) {
+export function LibraryFilesTab({ search, refreshKey }: { search: string; refreshKey?: number }) {
   const [items, setItems] = useState<KbItem[]>([])
+  /** 自由任务 workspace 产出的文档（md/html），归入「文档」筛选；来源是任务产物，不提供删除 */
+  const [wsDocs, setWsDocs] = useState<WorkspaceDocItem[]>([])
   const [filterType, setFilterType] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   const loadItems = useCallback(async () => {
     setLoading(true)
     try {
-      const res = (await window.nexa.kbList({ limit: 200 })) as KbItem[]
+      const [res, docs] = await Promise.all([
+        window.nexa.kbList({ limit: 200 }) as Promise<KbItem[]>,
+        window.nexa.workspaceDocsList() as Promise<WorkspaceDocItem[]>,
+      ])
       // 主进程 tags 可能为 null（未打标签条目），统一归一为空数组供渲染使用
       setItems(res.map((i) => ({ ...i, keywords: i.keywords ?? [], tags: i.tags ?? [] })))
+      setWsDocs(docs)
     } finally {
       setLoading(false)
     }
   }, [])
 
-  useEffect(() => { void loadItems() }, [loadItems])
+  useEffect(() => { void loadItems() }, [loadItems, refreshKey])
 
   /** 待删除条目（null 表示确认弹框关闭） */
   const [pendingDelete, setPendingDelete] = useState<KbItem | null>(null)
@@ -98,6 +106,13 @@ export function LibraryFilesTab({ search }: { search: string }) {
     })
   }, [items, filterType, q])
 
+  // workspace 文档：归入「文档」筛选（全部视图也展示），按文件名 / 来源任务标题搜索
+  const filteredWsDocs = useMemo(() => {
+    if (filterType && filterType !== "doc") return []
+    if (!q) return wsDocs
+    return wsDocs.filter((d) => d.name.toLowerCase().includes(q) || d.sessionTitle.toLowerCase().includes(q))
+  }, [wsDocs, filterType, q])
+
   if (loading) {
     return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">加载中…</div>
   }
@@ -106,25 +121,25 @@ export function LibraryFilesTab({ search }: { search: string }) {
     <div className="flex h-full flex-col">
       {/* 横向筛选条: 类型 chips */}
       <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border px-4 py-2.5">
-        <FilterChip active={!filterType} onClick={() => setFilterType(null)} label="全部" count={items.length} />
+        <FilterChip active={!filterType} onClick={() => setFilterType(null)} label="全部" count={items.length + wsDocs.length} />
         {Object.entries(TYPE_META).map(([key, meta]) => (
           <FilterChip
             key={key}
             active={filterType === key}
             onClick={() => setFilterType(filterType === key ? null : key)}
             label={meta.label}
-            count={typeCounts[key] ?? 0}
+            count={key === "doc" ? (typeCounts[key] ?? 0) + wsDocs.length : typeCounts[key] ?? 0}
           />
         ))}
       </div>
 
       {/* 卡片网格 */}
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        {filtered.length === 0 ? (
+        {filtered.length === 0 && filteredWsDocs.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
             <FileText className="h-10 w-10 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">{items.length === 0 ? "资料库为空" : "无匹配结果"}</p>
-            <p className="text-xs text-muted-foreground/70">{items.length === 0 ? "对话中可让 Agent 入库，或用浏览器插件采集" : "尝试调整搜索或筛选条件"}</p>
+            <p className="text-sm text-muted-foreground">{items.length === 0 && wsDocs.length === 0 ? "资料库为空" : "无匹配结果"}</p>
+            <p className="text-xs text-muted-foreground/70">{items.length === 0 && wsDocs.length === 0 ? "对话中可让 Agent 入库，或用浏览器插件采集" : "尝试调整搜索或筛选条件"}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -194,6 +209,36 @@ export function LibraryFilesTab({ search }: { search: string }) {
                 </div>
               )
             })}
+            {/* 自由任务产出的文档（md/html）：任务 workspace 文件，不提供删除；点击经产物面板右侧抽屉预览（md 渲染 / html 内置浏览器） */}
+            {filteredWsDocs.map((d) => (
+              <div
+                key={`wsdoc:${d.sessionId}:${d.relPath}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => void useArtifactsStore.getState().openArtifact(d.sessionId, d.relPath)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    void useArtifactsStore.getState().openArtifact(d.sessionId, d.relPath)
+                  }
+                }}
+                className="group rounded-xl border border-border bg-background p-4 text-left transition-colors hover:border-primary/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div className="flex items-start gap-3">
+                  <FileType className="h-6 w-6 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-center gap-2">
+                      <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-medium", TYPE_META.doc.cls)}>文档</span>
+                      <span className="text-[10px] text-muted-foreground">{timeAgo(d.mtime)}</span>
+                    </div>
+                    <div className="line-clamp-2 break-all text-sm font-semibold leading-snug">{d.name}</div>
+                    <div className="mt-1.5 truncate text-xs leading-relaxed text-muted-foreground" title={d.sessionTitle}>
+                      来自「{d.sessionTitle}」
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

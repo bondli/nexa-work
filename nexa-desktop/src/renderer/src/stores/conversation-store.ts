@@ -65,6 +65,10 @@ export interface ChatMessage {
   createdAt: number
   /** 流式中为 true，done 后变 false */
   streaming?: boolean
+  /** assistant token 用量 */
+  usage?: { input?: number; output?: number; totalTokens?: number } | null
+  /** assistant 使用的模型标识 provider/modelId */
+  model?: string
 }
 
 /** 完整会话（聊天主区用） */
@@ -234,7 +238,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     if (typeof window === "undefined" || !window.nexa) return
     try {
       const [rawMsgs, rawRuns] = await Promise.all([
-        window.nexa.loadMessages(id) as Promise<Array<{ id: string; role: string; content: string; thinking?: string | null; run_id?: string | null; attachments?: ChatAttachment[] | null; tool_name: string | null; tool_call_id: string | null; created_at: number }>>,
+        window.nexa.loadMessages(id) as Promise<Array<{ id: string; role: string; content: string; thinking?: string | null; run_id?: string | null; attachments?: ChatAttachment[] | null; tool_name: string | null; tool_call_id: string | null; created_at: number; token_usage: { input?: number; output?: number; cost?: number; totalTokens?: number } | null }>>,
         window.nexa.sessionRuns(id) as Promise<Array<{ id: string; status: AgentRunInfo["status"]; started_at: number; duration_ms: number | null; tool_call_count: number }>>,
       ])
       const messages: ChatMessage[] = rawMsgs.map((m) => {
@@ -246,6 +250,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
           runId: m.run_id ?? null,
           attachments: m.attachments ?? undefined,
           createdAt: m.created_at * 1000,
+          usage: m.token_usage ?? null,
         }
         // tool role: content 是 { args, result, success, durationMs } JSON
         if (m.role === "tool") {
@@ -543,6 +548,8 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
               thinkingStreaming: false,
               streaming: false,
               id: evt.id, // 用 runtime 的真实 ID 覆盖
+              usage: evt.usage ?? msgs[lastStreamingIdx].usage,
+              model: evt.model ?? msgs[lastStreamingIdx].model,
             }
           } else {
             // 没有 streaming 消息（可能 delta 都被 flush 完了），直接新增
@@ -554,6 +561,8 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
               runId: activeRunBySession.get(sessId) ?? null,
               streaming: false,
               createdAt: Date.now(),
+              usage: evt.usage,
+              model: evt.model,
             })
           }
           return {

@@ -431,8 +431,7 @@ function createSessionDAO(db: DbHandle): SessionDAO {
       db.run("DELETE FROM messages WHERE session_id = ?", [id])
       db.run("DELETE FROM job_runs WHERE job_id IN (SELECT id FROM scheduled_jobs WHERE created_by_session = ?)", [id])
       db.run("DELETE FROM scheduled_jobs WHERE created_by_session = ?", [id])
-      db.run("DELETE FROM knowledge_items WHERE workspace_id = ?", [id])
-      db.run("DELETE FROM notes WHERE linked_session = ?", [id])
+      // 知识库条目（金句/文章/图片/文档）与笔记是用户资产，由 Agent 工具入库，不随任务删除
       db.run("DELETE FROM sessions WHERE id = ?", [id])
     },
   }

@@ -8,19 +8,63 @@
 - 通用设置新增「字体大小」选项（12/14/16px，持久化到 settings.chatFontSize），经 `--chat-font-size` CSS 变量仅作用于会话消息内容
 - 会话消息流末尾新增「生成的产物」文件卡（Markdown/HTML/PDF 等文档类文件），点击直达右侧产物面板并自动展开父目录定位预览（artifacts-store 新增 openArtifact）
 - 本地实现 shadcn ai-elements 组件（Conversation / Message / MessageContent / Response / Tool / PlanCard，API 对齐官方），消息展示统一组件化、降低维护成本
+- 桌面端：资料库「文档」筛选汇聚自由任务产出的 md/html 文档（主进程递归扫描任务 workspace，按修改时间倒序限 200 条），不提供删除入口，点击经右侧产物抽屉预览（md 走 Markdown 渲染，html 走内置浏览器静态服务加载）
+- 手机端：资料库条目详情支持富预览——图片原图按宽高比等比展示（libraryGet 新增 dataUrl 下发）、html 文档经 WebView 渲染、md 经 Markdown 渲染
+- 手机端：发消息框与「新建任务」页新增「+」按钮，可从相册选图（最多 3 张，自动压缩至长边 1600 / JPEG 0.7 以适配中继 4MB 上限）随首条消息发送，会话内支持仅发图不发文字；桌面端中继 task:create / session:send 转发附件并落盘 ~/.nexa/uploads，供 Agent 收藏入库（选图压缩逻辑抽为 lib/image-picker 共用）
+- 手机端：会话消息气泡渲染图片附件——session:messages 回包附件转 dataUrl 下发（单张超 2.5MB 跳过防中继超限），带图发送后整列刷新替换无图气泡
+- 手机端：我的页新增「字体」设置（12/14/16px），仅作用于任务详情页消息正文字号，持久化到 SecureStore
+- 手机端：资料库右上角新增「+」新增笔记入口，新增笔记页可填标题/正文并写入桌面端 note 表（中继 note.create）
+- 手机端：我的页通知设置对齐桌面——任务通知开关 + 通知音四选（灵动/清脆/悠扬/静音），切换即试听；提示音由运行时合成 WAV 播放，不引入音频资源文件
+- 手机端：任务详情页对齐桌面端任务轨迹（RunTrace）——按用户消息切分为任务组，思考过程与工具调用收拢进「任务耗时 X分Y秒 · N 次工具调用」摘要条（运行中自动展开、结束后自动收拢，最终回答常显）；耗时/工具数取自桌面端 agent_runs 真实数据（新增中继 session.runs，消息带 runId 关联），无工具调用的普通问答不显示摘要条
+- 手机端：任务页新增「已归档」分组，展示归档任务（中继 session:list 合并未归档 + 归档两批）
+- 手机端：接入系统级推送（expo-notifications）——Android 建立「任务通知」有声/静音两个通知渠道，打开开关时申请 POST_NOTIFICATIONS 权限；后台/锁屏时由系统通知提醒，前台改为应用内弹窗 + 合成提示音；Expo Go 无原生模块时自动降级为应用内提醒（不崩溃）
 
 ### Changed
+- 桌面端：`npm run pack` 改为一次产出 mac arm64 dmg（`Nexa-0.1.0-arm64.dmg`）+ Windows x64 NSIS 安装包（`Nexa-0.1.0-x64.exe`），均免签名；Windows 目标显式锁定 x64（否则在 Apple Silicon 上会按宿主架构产出 arm64 包）并统一产物命名模板 `${productName}-${version}-${arch}.${ext}`（原为带空格的 `Nexa Setup 0.1.0.exe`），`dist` 仍只出 mac 包
+- 桌面端：mac 打包目标只保留 arm64，`npm run dist` 不再额外产出 Intel（x64）dmg
+- 手机端：任务详情页发送按钮改为圆形图标按钮（40×40 圆底 + 白色向上箭头，发送中显示加载圈），与桌面端/主流 IM 一致
+- 手机端：任务详情页消息加载完成后默认滚动到最新一条（每会话仅一次，延迟一帧等 Markdown/表格测量完成后再滚，避免停在中间）
+- 手机端：`(tabs)/profile.tsx` 重命名为 `(tabs)/settings.tsx`（路由名同步改为 settings），手机端不再有「我的」概念，统一为设置页
+- 手机端：桌面图标改为「黑色背景 + 白色机器人 logo」，logo 在上一版基础上再缩小到 2/3（自适应前景约占画布 37%、传统图标 40%），移除 monochrome 层避免被系统主题图标渲染成白底黑字；favicon 同步改为黑底白标
+- 手机端：启动页改为机器人 logo（expo-splash-screen 插件显式配置 image/imageWidth/backgroundColor=#0a0a0a，此前插件未传 props 导致用的是 SDK 默认灰色 logo + 白底）
+- 手机端：通知开关与系统通知权限双向对齐——开关状态 = 系统权限（系统里开了 App 开关自动开、关了自动关）；打开时申请权限，失败弹框可直接去设置；关闭时因 Android 不允许 App 自行撤销权限，改为清理待发通知并直接跳转系统通知设置页；权限缺失时通知卡片常驻「去设置」提示行
+- 手机端：资料库图片条目支持点击全屏查看（新增 ImageViewer）：双指捏合缩放、双击放大/复位、放大后单指拖动、点击图片外空白处或右上角关闭；手势改用 RN 原生 onTouchStart/Move/End，修复此前双指捏合无效（PanResponder 被外层 ScrollView 抢走 responder）
+- 手机端：资料条目增加 LRU 缓存（最近 6 条，含图片 base64），短时间内重复查看不再重新走中继加载
+- 手机端：任务详情页产物区改为消息加载完成后才渲染，消除「先出产物、再出消息」的错位感
+- 手机端：解绑配对电脑的二次确认改为应用内主题化弹框（新增 components/confirm-dialog，替换系统 Alert）
+- 手机端：底部导航「我的」更名为「设置」（tab 文案、页面标题与图标同步，图标由人头换为齿轮，对齐桌面端），并收紧页面标题与首个分组之间的间距
+- 手机端：任务详情页导航栏标题改为具体任务名（取自会话列表，超长由单行省略号截断；未加载到标题时回退「任务详情」）
+- 桌面端：全局图标导航栏 NavRail 由 `features/sidebar/` 迁至 `components/nav-rail.tsx`——features 只保留业务域目录，应用骨架组件统一放 components
+- 桌面端：新增任务页（欢迎页）改为自上而下的三段式布局——第一行应用图标 + Slogan（左右结构），第二行自由任务 / 项目编码两张选择卡（左右结构），第三行输入框（不再固定在页面底部）
 - 设置弹框模型配置独立为「模型」tab（通用 tab 仅保留外观/字体）；弹框固定高度 640px，滚动收敛在右侧内容区，切换 tab 高度不再抖动；移除左下角常驻的「修改即保存」提示（自动保存成功/失败反馈保留在模型 tab 标题行）
 - 设置由全页视图改为全局弹框：ui-store 以 settingsOpen 控制开关，新增 ui/dialog（Radix Dialog）与 settings-dialog，移除 settings-page 与 ActiveView 的 "settings" 分支
 - 模型配置改为「修改即保存」：字段变更后 600ms 防抖自动持久化，移除保存按钮，保存成功/失败反馈展示在模型 tab 标题行
 - shadcn/ui 组件化推进：新增 Card / Badge / Avatar / Input，设置弹框 provider 卡片与知识库/记忆条目、欢迎页模式选择卡、nav-rail 用户头像等完成迁移
 - MarkdownRenderer 与消息气泡字号跟随 `--chat-font-size`
+- 桌面端：任务自动标题字数上限由 12 字放宽至 20 字；任务列表超长标题省略号截断，hover 经 title 属性显示完整标题
+- 桌面端：ArtifactsPanel 重构为通用文档渲染组件（features/artifacts-panel → components/artifacts-panel），职责聚焦文档渲染，显式拆分两种形态——单文件纯渲染（资料库文档/消息文件卡点开即看）与带文件树浏览（任务产物左预览+右树切换）；组件内拆分为外壳 / file-preview / tree-node / utils 四个模块
+- 手机端：底部菜单与资料页标题「资料」更名「资料库」；资料库顶部 tab 改为「文件 / 笔记」，文件覆盖文章/文档/图片/金句四种类型徽章
+- 手机端：我的页外观设置改为通知同款行内样式，右侧单选组（系统 / 浅色 / 深色）
+- 手机端：笔记页仅展示纯笔记（不再混入金句），列表全量加载
+- 手机端：中继 RPC 默认超时由 30s 降至 12s，桌面端无响应时错误反馈更及时
 
 ### Fixed
+- 桌面端：新增单实例锁（app.requestSingleInstanceLock）——此前可同时开多个桌面端，多实例会各自用 sql.js 整库回写同一 SQLite 文件（后写覆盖先写），并以同一 deviceId 争抢中继连接（手机端表现为「一会儿在线一会儿离线」）；现在重复启动会把已有窗口唤到前台，新进程直接退出，且在 ready 前二次校验，避免未拿到锁的进程做初始化
+- 手机端：底部手势指示条区域透出白色——根布局改为 SafeAreaProvider + 按 safe-area inset 铺主题底色（画在 Stack 底层，不遮挡页面内容），浅色（#f5f5f5）/深色（#0a0a0a）均与页面背景一致；任务详情页输入框增加底部 inset 内边距，不再被手势条压住；关闭手势提示条（inset=0）时自动不渲染
+- 手机端：华为等厂商 ROM 手势提示条区域无法跟随 App 主题——app.json 改用 expo-navigation-bar 插件 `enforceContrast: false`（关闭 Android 导航栏对比度遮罩，该遮罩只跟随系统主题、会盖住应用底色），并接入 expo-system-ui 在运行时把根视图/窗口底色设为当前主题色（移除已失效的 androidNavigationBar 配置）；需重新构建安装包生效
+- 手机端：页面头部返回按钮的 Android 水波纹/暗色闪动——根 Stack 统一用自定义 headerLeft（透明 ripple），不再使用原生返回键
+- 桌面端：设置 · 手机配对页输入中继地址时输入框闪烁——配对码倒计时 500ms 定时器放在页面组件内，导致整页（含输入框）每 500ms 重渲染；倒计时抽为独立组件（1s 粒度），页面其余部分不再随计时器重渲染
+- 手机端：深色主题下顶部状态栏图标改为浅色（此前系统固定浅色模式导致电池/时间不可见）
+- 手机端：底部 tab 点击时去掉 Android 默认水波纹暗色闪动
+- 手机端：定时任务列表项点击无反应修复（`Link asChild` 包裹 `View` 不透传 onPress，改为 `Pressable`），点击进入执行记录页；执行记录点击可跳关联任务详情
+- 手机端：修复任务/定时任务/执行记录/资料库的时间显示为 1970 年——桌面端 SQLite 时间字段为秒，手机端直接 `new Date(秒)` 被当毫秒；新增 lib/time.ts 统一换算（兼容秒/毫秒）
 - 修复顶部全局拖动覆盖层（fixed h-16 z-70）遮挡页面顶栏按钮点击的问题：移除全局兜底层，改由 nav-rail Logo 容器自带 drag-bar 承担拖动
 - Tailwind v4 preflight 将 button 光标重置为 default，global.css 统一为可点击元素恢复手型光标（disabled 为 not-allowed）
 - nav-rail 用户头像圆形背景加深（bg-foreground/15 + 内描边），深浅色主题下均清晰可见
 - 修复 runtime.generateTitleAsync：getApiKey 可返回 undefined 导致编译失败（provider 禁用/未配 key 时跳过标题生成）
+- 桌面端：删除任务不再级联删除知识库条目（金句/文章/图片/文档）与笔记——二者是 Agent 工具入库的用户资产，生命周期独立于会话
+- 桌面端：修复资料库「文档」卡片点击无反应——ArtifactsPanel 此前仅在任务视图挂载，改为全局挂载（fixed 抽屉不占布局），html 走内置浏览器 iframe、md 走 Markdown 渲染
+- 手机端：修复任务列表 SectionList 整组内容重复渲染、分组头图标与标题垂直堆叠的问题
 
 ### Changed (Previous)
 - 整体布局重构（对齐 Codex）：左侧改为 78px 纯图标导航栏（Logo 置顶 + 任务 / 定时任务 / 资料库 / 技能包 / 设置），点击切换右侧视图；所有页面统一为左右分栏结构，左侧面板固定 260px，页面标题移至右侧区域靠左对齐

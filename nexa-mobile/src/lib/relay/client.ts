@@ -75,6 +75,16 @@ export class RelayClient {
     this.opts = opts
   }
 
+  /** 当前使用的 token（配对成功后由 hello 下发并保存） */
+  get token(): string | undefined {
+    return this.opts.token
+  }
+
+  /** 当前中继地址 */
+  get relayUrl(): string {
+    return this.opts.relayUrl
+  }
+
   // ===== 生命周期 =====
   async start(): Promise<void> {
     this.shouldRun = true
@@ -116,10 +126,13 @@ export class RelayClient {
     if (!this.opts.relayUrl) return
     this.teardownSocket()
     const url = this.buildUrl()
+    // 调试日志：连接尝试在 Metro 终端 / adb logcat -s ReactNativeJS 可见
+    console.log(`[relay] connect → ${url}`)
     let ws: WebSocket
     try {
       ws = new WebSocket(url)
     } catch (e) {
+      console.log("[relay] ws create failed:", e)
       this.status.lastError = e instanceof Error ? e.message : "连接失败"
       this.emitStatus()
       this.scheduleReconnect()
@@ -128,6 +141,7 @@ export class RelayClient {
     this.ws = ws
 
     ws.onopen = () => {
+      console.log("[relay] open")
       this.status.connected = true
       this.reconnectAttempts = 0
       this.status.lastError = null
@@ -142,14 +156,21 @@ export class RelayClient {
       } catch {
         return
       }
+      console.log("[relay] ←", msg.type, msg.id ?? "")
       void this.handleMessage(msg)
     }
 
-    ws.onerror = () => {
-      this.status.lastError = "中继连接错误"
+    ws.onerror = (ev) => {
+      // RN 的错误事件仅 message 字段可能有值；HTTP 升级失败（404/网络不通）通常表现为 onerror + onclose
+      const detail = (ev as unknown as { message?: string })?.message ?? ""
+      console.log("[relay] error:", detail || "(无详情)")
+      this.status.lastError = detail ? `中继连接错误：${detail}` : "中继连接错误"
+      this.emitStatus()
     }
 
-    ws.onclose = () => {
+    ws.onclose = (ev) => {
+      const { code: closeCode, reason } = (ev as unknown as { code?: number; reason?: string }) ?? {}
+      console.log(`[relay] close code=${closeCode} reason=${reason || "(空)"}`)
       this.status.connected = false
       this.status.peerOnline = false
       this.stopHeartbeat()
@@ -210,13 +231,19 @@ export class RelayClient {
     switch (msg.type) {
       case RELAY_HELLO: {
         const payload = (msg.payload ?? {}) as { token?: string; peer?: PairedPeer }
-        if (payload.token) {
-          this.opts.token = payload.token
-          await storage.setToken(payload.token)
-        }
+        // 先同步置位 peer/peerOnline 并广播，再异步持久化 token——
+        // 若先 await 落盘，期间被中继踢连（onclose 清 peerOnline）会把配对成功状态抹掉
         this.status.peer = payload.peer ?? null
         this.status.peerOnline = !!payload.peer
         this.emitStatus()
+        if (payload.token) {
+          this.opts.token = payload.token
+          try {
+            await storage.setToken(payload.token)
+          } catch (e) {
+            console.log("[relay] save token failed:", e)
+          }
+        }
         return
       }
       case RELAY_PAIRED: {
@@ -247,6 +274,14 @@ export class RelayClient {
       case RELAY_PONG:
         if (this.pongTimer) { clearTimeout(this.pongTimer); this.pongTimer = null }
         return
+      case "relay:error": {
+        // 无 RPC id 的中继错误（如配对码无效）：透传到状态栏，供配对页/用户感知
+        const message = (msg.payload as { message?: string } | undefined)?.message ?? "中继错误"
+        console.log("[relay] server error:", message)
+        this.status.lastError = message
+        this.emitStatus()
+        return
+      }
       case AGENT_EVENT:
         for (const l of this.eventListeners) l(msg.payload as AgentEvent)
         return
@@ -279,8 +314,8 @@ export class RelayClient {
     this.ws.send(JSON.stringify(env))
   }
 
-  /** 发起一个带 id 的 RPC，等待回包 */
-  call<P = unknown>(type: string, payload?: unknown, timeoutMs = 30_000): Promise<P> {
+  /** 发起一个带 id 的 RPC，等待回包（桌面端正常响应在毫秒级，12s 足够覆盖慢网；无响应不必干等 30s） */
+  call<P = unknown>(type: string, payload?: unknown, timeoutMs = 12_000): Promise<P> {
     return new Promise<P>((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         reject(new Error("未连接中继"))
@@ -302,6 +337,9 @@ export class RelayClient {
   onSchedulerNotify(l: NotifyListener): () => void { this.notifyListeners.add(l); return () => this.notifyListeners.delete(l) }
 
   private emitStatus(): void {
-    for (const l of this.statusListeners) l(this.status)
+    // 必须快照：this.status 是被原地修改的单例对象，直接传引用会让
+    // zustand/React 认为状态没变（Object.is 相等），界面永远不更新
+    const snapshot = { ...this.status }
+    for (const l of this.statusListeners) l(snapshot)
   }
 }
