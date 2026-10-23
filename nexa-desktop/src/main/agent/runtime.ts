@@ -92,7 +92,7 @@ function buildAttachmentNote(attachments: ChatAttachment[], model: Model<string>
 const TITLE_SYSTEM_PROMPT = `你是会话标题生成器。用户会给你一段任务描述，其中可能包含 Markdown 结构（## 小标题、列表、代码块等）。
 请只输出一个中文会话标题，规则：
 1. 概括任务的核心意图，不要照抄原文片段
-2. 不超过 20 个字
+2. 不超过 30 个字
 3. 不要出现 Markdown 符号、引号、标点、emoji
 4. 不要"标题："之类前缀，不要解释，只输出标题文本本身
 5. 忽略 Goal / 背景 / 需求 这类结构性小标题，抓住真正的任务内容
@@ -541,8 +541,9 @@ export class AgentRuntime {
             .filter((c): c is { type: "thinking"; thinking: string } => c.type === "thinking")
             .map((c) => c.thinking)
             .join("")
-          // DB 持久化
-          this.db.message.insertAssistant(sessionId, text, msg.usage, thinking || undefined, runId)
+          // DB 持久化（model 一并落库，重新进入会话时仍能展示模型名）
+          const modelId = `${msg.provider}/${msg.model}`
+          this.db.message.insertAssistant(sessionId, text, msg.usage, thinking || undefined, runId, modelId)
           if (msg.stopReason === "error") {
             runError = msg.errorMessage ?? "LLM 调用失败"
             this.pushEvent({ type: "error", sessionId, code: "llm_error", message: runError })
@@ -678,7 +679,7 @@ export class AgentRuntime {
   }
 
   /**
-   * 首条用户消息后异步生成 ≤12 字会话标题。
+   * 首条用户消息后异步生成 ≤30 字会话标题。
    * 复用 pi 的 generateSummary 做一次轻量 LLM 调用，返回后经 normalizeTitle 清洗校验，
    * 成功后 rename 落库并推送 session.title 事件。
    * 任何失败或清洗后不可用（如模型照抄出 "## Goal - "）时静默忽略，保留创建时的兜底标题。
@@ -704,7 +705,7 @@ export class AgentRuntime {
     )
     if (!result.ok) return
     // 模型可能忽略约束照抄原文的 Markdown 结构，必须清洗并做有效性校验
-    const title = normalizeTitle(result.value, 20)
+    const title = normalizeTitle(result.value, 30)
     if (!title) return
     this.db.session.rename(state.id, title)
     this.pushEvent({ type: "session.title", sessionId: state.id, title })

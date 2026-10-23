@@ -66,6 +66,7 @@ export const IPC = {
   RELAY_SET_URL: "relay:setUrl",
   RELAY_CREATE_PAIRING: "relay:createPairing",
   RELAY_UNBIND: "relay:unbind",
+  RELAY_RENAME: "relay:rename",
 
   // 系统设置
   GET_THEME: "theme:get",

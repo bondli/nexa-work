@@ -173,6 +173,10 @@ const api = {
   relayUnbind: (deviceId: string) =>
     ipcRenderer.invoke(IPC.RELAY_UNBIND, deviceId),
 
+  /** 重命名已配对设备（名称仅保存在本机，不影响手机端自身显示） */
+  relayRename: (deviceId: string, name: string) =>
+    ipcRenderer.invoke(IPC.RELAY_RENAME, deviceId, name),
+
   // ===== 专家 =====
   expertList: () =>
     ipcRenderer.invoke(IPC.EXPERT_LIST),

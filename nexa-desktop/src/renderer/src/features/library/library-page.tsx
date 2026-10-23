@@ -23,6 +23,8 @@ export function LibraryPage() {
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   /** 是否新建笔记 */
   const [isNewNote, setIsNewNote] = useState(false)
+  /** 新建笔记时从列表透传过来的默认分类（用户在 tab 里点了某个分类 → 进编辑器就默认选那个） */
+  const [newNoteCategory, setNewNoteCategory] = useState<string | null>(null)
   /** 手动刷新计数，点击刷新按钮 +1 触发子 tab 重新拉数据 */
   const [refreshKey, setRefreshKey] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
@@ -41,7 +43,8 @@ export function LibraryPage() {
         <PageTitleBar title="资料库" />
         <NoteEditor
           noteId={isNewNote ? undefined : editingNoteId}
-          onClose={() => { setEditingNoteId(null); setIsNewNote(false) }}
+          defaultCategory={isNewNote ? newNoteCategory : null}
+          onClose={() => { setEditingNoteId(null); setIsNewNote(false); setNewNoteCategory(null) }}
         />
       </div>
     )
@@ -104,8 +107,8 @@ export function LibraryPage() {
           <LibraryNotesTab
             search={search}
             refreshKey={refreshKey}
-            onOpenNote={(id) => { setIsNewNote(false); setEditingNoteId(id) }}
-            onCreateNote={() => { setIsNewNote(true); setEditingNoteId("new") }}
+            onOpenNote={(id) => { setIsNewNote(false); setNewNoteCategory(null); setEditingNoteId(id) }}
+            onCreateNote={(cat) => { setIsNewNote(true); setNewNoteCategory(cat); setEditingNoteId("new") }}
           />
         )}
       </div>

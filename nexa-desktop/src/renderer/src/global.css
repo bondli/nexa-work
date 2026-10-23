@@ -214,6 +214,27 @@
   animation: caret-blink 1s step-end infinite;
 }
 
+/* ===== AI Elements：进行态文字 shimmer（思考中 / 执行中） ===== */
+@keyframes ai-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.ai-shimmer {
+  display: inline-block;
+  background-image: linear-gradient(
+    90deg,
+    var(--muted-foreground) 0%,
+    var(--foreground) 45%,
+    var(--muted-foreground) 90%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: ai-shimmer 1.8s linear infinite;
+}
+
 /* markdown streaming 预览 —— 纯等宽显示不触发 markdown 解析 */
 .markdown-streaming-preview {
   white-space: pre-wrap;

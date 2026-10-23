@@ -6,8 +6,9 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react"
 import QRCode from "qrcode"
-import { Smartphone, Wifi, WifiOff, Loader2, RefreshCw, Copy, Trash2, Check, ShieldAlert } from "lucide-react"
+import { Smartphone, Wifi, WifiOff, Loader2, RefreshCw, Copy, Trash2, Check, ShieldAlert, Pencil } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
+import { Input } from "@renderer/components/ui/input"
 import {
   Dialog,
   DialogContent,
@@ -69,6 +70,11 @@ export function RelayPairingTab() {
   /** 待解绑设备（null 表示确认弹框关闭） */
   const [pendingUnbind, setPendingUnbind] = useState<PairedDevice | null>(null)
   const [unbinding, setUnbinding] = useState(false)
+  /** 待改名设备（null 表示改名弹框关闭） */
+  const [renaming, setRenaming] = useState<PairedDevice | null>(null)
+  const [renameDraft, setRenameDraft] = useState("")
+  const [renamingBusy, setRenamingBusy] = useState(false)
+  const [renameError, setRenameError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [pairError, setPairError] = useState<string | null>(null)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
@@ -176,6 +182,31 @@ export function RelayPairingTab() {
       setPendingUnbind(null)
     } finally {
       setUnbinding(false)
+    }
+  }
+
+  /** 打开改名弹框，草稿预填当前名字 */
+  const openRename = (device: PairedDevice) => {
+    setRenaming(device)
+    setRenameDraft(device.name)
+    setRenameError(null)
+  }
+
+  const confirmRename = async () => {
+    if (!renaming) return
+    const name = renameDraft.trim()
+    if (!name) {
+      setRenameError("请输入设备名称")
+      return
+    }
+    setRenamingBusy(true)
+    try {
+      await window.nexa.relayRename(renaming.deviceId, name)
+      setRenaming(null)
+    } catch (err) {
+      setRenameError(err instanceof Error ? err.message : "改名失败")
+    } finally {
+      setRenamingBusy(false)
     }
   }
 
@@ -328,6 +359,16 @@ export function RelayPairingTab() {
                   <div className="truncate font-mono text-[10px] text-muted-foreground">{d.deviceId}</div>
                 </div>
                 <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0 text-muted-foreground"
+                  title="重命名"
+                  aria-label="重命名设备"
+                  onClick={() => openRename(d)}
+                >
+                  <Pencil className="h-3 w-3" />
+                </Button>
+                <Button
                   variant="outline"
                   size="sm"
                   className="h-7 shrink-0 gap-1 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive"
@@ -377,6 +418,46 @@ export function RelayPairingTab() {
             <Button variant="destructive" size="sm" className="gap-1.5" onClick={() => void confirmInsecureUrl()} disabled={confirmingUrl}>
               {confirmingUrl ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
               仍然继续
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 改名弹框 */}
+      <Dialog
+        open={!!renaming}
+        onOpenChange={(open) => {
+          if (!open && !renamingBusy) setRenaming(null)
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>重命名设备</DialogTitle>
+            <DialogDescription>
+              名称只保存在本机，用于区分多台手机，不影响手机端显示。
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={renameDraft}
+            maxLength={32}
+            placeholder="输入设备名称"
+            onChange={(e) => {
+              setRenameDraft(e.target.value)
+              if (renameError) setRenameError(null)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) void confirmRename()
+            }}
+          />
+          {renameError && <p className="text-xs text-destructive">{renameError}</p>}
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setRenaming(null)} disabled={renamingBusy}>
+              取消
+            </Button>
+            <Button size="sm" onClick={() => void confirmRename()} disabled={renamingBusy}>
+              {renamingBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+              保存
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -46,7 +46,8 @@ export function LibraryNotesTab({
   search: string
   refreshKey?: number
   onOpenNote: (id: string) => void
-  onCreateNote: () => void
+  /** 新建笔记回调，可携带列表当前选中的分类名作为默认分类（未选分类时为 null，保持 "未分类" 默认值） */
+  onCreateNote: (defaultCategory: string | null) => void
 }) {
   const [notes, setNotes] = useState<NoteItem[]>([])
   const [categories, setCategories] = useState<NoteCategory[]>([])
@@ -160,7 +161,7 @@ export function LibraryNotesTab({
         >
           <Plus className="h-3 w-3" /> 新增分类
         </button>
-        <Button variant="outline" size="sm" className="ml-auto h-7 gap-1.5 text-xs" onClick={onCreateNote}>
+        <Button variant="outline" size="sm" className="ml-auto h-7 gap-1.5 text-xs" onClick={() => onCreateNote(filterCategory)}>
           <Plus className="h-3.5 w-3.5" /> 新增笔记
         </Button>
       </div>

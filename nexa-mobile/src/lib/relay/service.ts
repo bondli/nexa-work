@@ -679,7 +679,7 @@ export const useRelayStore = create<RelayStoreState>((set, get) => ({
         const r = upsert(
           list,
           (m) => ({ ...m, thinking: (m.thinking ?? "") + delta, done: false }),
-          () => ({ id: mid || `think-${Date.now()}`, role: "assistant", content: "", thinking: delta, done: false })
+          () => ({ id: mid || `think-${Date.now()}`, role: "assistant", content: "", thinking: delta, done: false, createdAt: Math.floor(Date.now() / 1000) })
         )
         return { messages: { ...s.messages, [sid]: r.arr } }
       })
@@ -691,19 +691,22 @@ export const useRelayStore = create<RelayStoreState>((set, get) => ({
         const r = upsert(
           list,
           (m) => ({ ...m, content: m.content + delta, done: false }),
-          () => ({ id: mid || `delta-${Date.now()}`, role: "assistant", content: delta, done: false })
+          () => ({ id: mid || `delta-${Date.now()}`, role: "assistant", content: delta, done: false, createdAt: Math.floor(Date.now() / 1000) })
         )
         return { messages: { ...s.messages, [sid]: r.arr } }
       })
     } else if (type === "message.assistant.done") {
       const content = String(e.content ?? "")
       const thinking = e.thinking != null ? String(e.thinking) : null
+      // 底栏展示用：模型标识与 token 用量（事件里已带，无需再查库）
+      const model = e.model != null ? String(e.model) : null
+      const usage = (e.usage ?? null) as ChatMessage["usage"]
       set((s) => {
         const list = s.messages[sid] ?? []
         const r = upsert(
           list,
-          (m) => ({ ...m, content, thinking: thinking ?? m.thinking, done: true }),
-          () => ({ id: mid || `done-${Date.now()}`, role: "assistant", content, thinking, done: true })
+          (m) => ({ ...m, content, thinking: thinking ?? m.thinking, done: true, model: model ?? m.model, usage: usage ?? m.usage }),
+          () => ({ id: mid || `done-${Date.now()}`, role: "assistant", content, thinking, done: true, model, usage, createdAt: Math.floor(Date.now() / 1000) })
         )
         return { messages: { ...s.messages, [sid]: r.arr } }
       })
@@ -711,7 +714,7 @@ export const useRelayStore = create<RelayStoreState>((set, get) => ({
       const content = String(e.content ?? "")
       set((s) => {
         const arr = [...(s.messages[sid] ?? [])]
-        arr.push({ id: `u-${Date.now()}`, role: "user", content })
+        arr.push({ id: `u-${Date.now()}`, role: "user", content, createdAt: Math.floor(Date.now() / 1000) })
         return { messages: { ...s.messages, [sid]: arr } }
       })
     }

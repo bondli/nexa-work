@@ -14,6 +14,14 @@ import {
   DialogFooter,
 } from "@renderer/components/ui/dialog"
 import { cn } from "@renderer/lib/utils"
+import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@renderer/components/ui/select"
 
 interface NoteData {
   id: string
@@ -32,9 +40,12 @@ interface NoteCategory {
 
 export function NoteEditor({
   noteId,
+  defaultCategory,
   onClose,
 }: {
   noteId?: string
+  /** 新建笔记时的默认分类（从资料库列表页透传；编辑已有笔记时为 null，分类从 noteGet 回包加载） */
+  defaultCategory?: string | null
   onClose: () => void
 }) {
   const [title, setTitle] = useState("")
@@ -72,6 +83,12 @@ export function NoteEditor({
       setCurrentId(res.id)
     }
   }, [noteId])
+
+  // 新建笔记：没有 noteId，用 defaultCategory（列表页透传过来的分类筛选）作为初始分类；
+  // 编辑已有笔记：loadNote 会把 DB 里的 category 覆盖回来
+  useEffect(() => {
+    if (!noteId && defaultCategory) setCategory(defaultCategory)
+  }, [noteId, defaultCategory])
 
   useEffect(() => { void loadNote() }, [loadNote])
 
@@ -152,7 +169,9 @@ export function NoteEditor({
   }
 
   return (
-    <div className="flex h-full flex-col">
+    // 根节点用 flex-1 + min-h-0 撑满剩余高度（不能用 h-full：父级还有 PageTitleBar，
+    // 100% 高度会让底部溢出被裁掉，内容多时滚不到最后）
+    <div className="flex min-h-0 flex-1 flex-col">
       {/* 顶部: 返回 + 标题 + 状态 + 操作 */}
       <div className="flex items-center gap-3 border-b border-border bg-background px-6 py-3">
         <button
@@ -189,21 +208,25 @@ export function NoteEditor({
       </div>
 
       {/* 编辑区 */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
         {/* 分类 + 标签行 */}
         <div className="mb-4 flex items-center gap-4">
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">分类</span>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="rounded-md border border-input bg-background px-2 py-1 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.name}>{cat.name}</option>
-              ))}
-              <option value="未分类">未分类</option>
-            </select>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger className="h-7 w-[120px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.name} className="text-xs">{cat.name}</SelectItem>
+                ))}
+                {/* 数据库里若不存在"未分类"（默认分类）才兜底追加，避免下拉里出现两个同名项 */}
+                {!categories.some((c) => c.name === "未分类") && (
+                  <SelectItem value="未分类" className="text-xs">未分类</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">标签</span>
@@ -251,10 +274,11 @@ export function NoteEditor({
           </button>
         </div>
 
-        {/* 编辑/预览 */}
+        {/* 编辑/预览：预览态改用仓库统一的 MarkdownRenderer（react-markdown + remark-gfm），
+            支持 GFM 表格 / 任务列表 / 删除线等；此前手写的 renderMarkdown 正则不支持 GFM 表格 */}
         {showPreview ? (
           <div className="note-preview max-w-none rounded-xl border border-border bg-background p-6">
-            <MarkdownPreview content={content} />
+            <MarkdownRenderer content={content} />
           </div>
         ) : (
           <textarea
@@ -296,33 +320,3 @@ export function NoteEditor({
   )
 }
 
-/** 轻量 Markdown 预览（不引入额外依赖，支持标题/粗体/列表/代码块） */
-function MarkdownPreview({ content }: { content: string }) {
-  const html = renderMarkdown(content)
-  return <div dangerouslySetInnerHTML={{ __html: html }} />
-}
-
-function renderMarkdown(md: string): string {
-  // 转义 HTML
-  let s = md.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-  // 代码块
-  s = s.replace(/```([\s\S]*?)```/g, (_, code) => `<pre><code>${code.trim()}</code></pre>`)
-  // 标题
-  s = s.replace(/^### (.+)$/gm, "<h3>$1</h3>")
-  s = s.replace(/^## (.+)$/gm, "<h2>$1</h2>")
-  s = s.replace(/^# (.+)$/gm, "<h1>$1</h1>")
-  // 粗体
-  s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-  // 斜体
-  s = s.replace(/\*(.+?)\*/g, "<em>$1</em>")
-  // 行内代码
-  s = s.replace(/`(.+?)`/g, "<code>$1</code>")
-  // 无序列表
-  s = s.replace(/^- (.+)$/gm, "<li>$1</li>")
-  s = s.replace(/(<li>[\s\S]*?<\/li>)/g, "<ul>$1</ul>")
-  // 引用
-  s = s.replace(/^&gt; (.+)$/gm, "<blockquote>$1</blockquote>")
-  // 段落（连续非空行）
-  s = s.replace(/^(?!<[hupobl])(.+)$/gm, "<p>$1</p>")
-  return s
-}

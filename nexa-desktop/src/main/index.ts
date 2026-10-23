@@ -284,7 +284,7 @@ async function createSessionInternal(params: SessionCreateParams): Promise<{ ses
   const session = db.session.create({
     id,
     // 兜底标题：剥离 Markdown 结构（"## Goal" 等）后再截断；LLM 标题生成成功后会被 session.title 事件覆盖
-    title: normalizeTitle(params.initialMessage, 20) || "新任务",
+    title: normalizeTitle(params.initialMessage, 30) || "新任务",
     mode: params.mode,
     workspace_path: wsPath,
     project_path: params.projectPath ?? null,
@@ -795,6 +795,12 @@ function registerIpcHandlers(): void {
     return true
   })
 
+  ipcMain.handle(IPC.RELAY_RENAME, async (_e, deviceId: string, name: string) => {
+    if (!relayClient) throw new Error("中继客户端未初始化")
+    relayClient.rename(deviceId, name)
+    return true
+  })
+
   // ===== 目录选择器 =====
   ipcMain.handle(IPC.OPEN_DIRECTORY_PICKER, async () => {
     const { dialog } = await import("electron")
@@ -934,6 +940,9 @@ app.whenReady().then(async () => {
               ...m,
               // 手机端按 runId 关联 agent_runs（任务耗时/工具次数）
               runId: m.run_id,
+              // 手机端消息底栏展示：时间 / 模型 / token 用量（字段名对齐 ChatMessage）
+              createdAt: m.created_at,
+              usage: m.token_usage,
               attachments: (m.attachments ?? []).map((a) => ({
                 name: a.name,
                 mimeType: a.mimeType,
@@ -1074,7 +1083,7 @@ app.whenReady().then(async () => {
             const expert = expertRegistry!.getDefault()
             const session = db.session.create({
               id,
-              title: normalizeTitle(description, 20) || "定时任务会话",
+              title: normalizeTitle(description, 30) || "定时任务会话",
               mode: "free",
               workspace_path: wsPath,
               project_path: null,

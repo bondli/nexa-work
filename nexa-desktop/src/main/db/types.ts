@@ -66,7 +66,10 @@ export interface Message {
   /** 所属 agent run（一次用户消息触发的一轮 loop）；历史数据为 null */
   run_id: string | null
   created_at: number
-  token_usage: { input?: number; output?: number; cost?: number } | null
+  /** token 用量（JSON 落库，读取时已反序列化） */
+  token_usage: { input?: number; output?: number; totalTokens?: number; cacheRead?: number; cacheWrite?: number; cost?: number } | null
+  /** assistant 实际使用的模型（provider/modelId）；历史数据为 null */
+  model: string | null
 }
 
 // ==========================================
@@ -267,7 +270,7 @@ export interface NoteCategoryDAO {
 /** Message 数据访问（Agent Runtime 持久化 + 历史加载） */
 export interface MessageDAO {
   insertUser(sessionId: string, content: string, attachments?: ChatAttachment[]): void
-  insertAssistant(sessionId: string, content: string, tokenUsage: unknown, thinking?: string, runId?: string | null): void
+  insertAssistant(sessionId: string, content: string, tokenUsage: unknown, thinking?: string, runId?: string | null, model?: string | null): void
   /** 工具调用完成后，往 messages 表补一条 tool role 消息（用于历史加载恢复 ToolCallBubble） */
   insertTool(sessionId: string, toolName: string, callId: string, result: unknown, success: boolean, durationMs: number | null, args?: unknown, runId?: string | null): void
   listBySession(sessionId: string): Message[]

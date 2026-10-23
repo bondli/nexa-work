@@ -165,6 +165,7 @@ CREATE TABLE IF NOT EXISTS messages (
   run_id TEXT,
   created_at INTEGER NOT NULL,
   token_usage TEXT,
+  model TEXT,
   FOREIGN KEY (session_id) REFERENCES sessions(id)
 );
 
@@ -590,10 +591,10 @@ function createMessageDAO(db: DbHandle): MessageDAO {
       )
     },
 
-    insertAssistant(sessionId: string, content: string, tokenUsage: unknown, thinking?: string, runId?: string | null): void {
+    insertAssistant(sessionId: string, content: string, tokenUsage: unknown, thinking?: string, runId?: string | null, model?: string | null): void {
       db.run(
-        `INSERT INTO messages (id, session_id, role, content, thinking, token_usage, run_id, created_at) VALUES (?, ?, 'assistant', ?, ?, ?, ?, ?)`,
-        [randomUUID(), sessionId, content, thinking ?? null, toJson(tokenUsage), runId ?? null, Math.floor(Date.now() / 1000)]
+        `INSERT INTO messages (id, session_id, role, content, thinking, token_usage, run_id, model, created_at) VALUES (?, ?, 'assistant', ?, ?, ?, ?, ?, ?)`,
+        [randomUUID(), sessionId, content, thinking ?? null, toJson(tokenUsage), runId ?? null, model ?? null, Math.floor(Date.now() / 1000)]
       )
     },
 
@@ -607,12 +608,16 @@ function createMessageDAO(db: DbHandle): MessageDAO {
     },
 
     listBySession(sessionId: string): Message[] {
-      // attachments 列为 JSON 文本，读取时反序列化为对象数组
-      const rows = db.query<Omit<Message, "attachments"> & { attachments: string | null }>(
+      // attachments / token_usage 列为 JSON 文本，读取时反序列化为对象
+      const rows = db.query<Omit<Message, "attachments" | "token_usage"> & { attachments: string | null; token_usage: string | null }>(
         `SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC`,
         [sessionId]
       )
-      return rows.map((r) => ({ ...r, attachments: parseJson<ChatAttachment[]>(r.attachments) }))
+      return rows.map((r) => ({
+        ...r,
+        attachments: parseJson<ChatAttachment[]>(r.attachments),
+        token_usage: parseJson<Message["token_usage"]>(r.token_usage),
+      }))
     },
   }
 }
@@ -1077,6 +1082,12 @@ export async function initDatabase(): Promise<IDatabase> {
     // 轻量迁移: 旧库补 messages.attachments 列（用户消息图片附件 JSON，已存在则忽略）
     try {
       handle.exec("ALTER TABLE messages ADD COLUMN attachments TEXT")
+    } catch {
+      /* 列已存在 */
+    }
+    // 轻量迁移: 旧库补 messages.model 列（assistant 实际使用的模型，历史上消息重进会话后仍可展示）
+    try {
+      handle.exec("ALTER TABLE messages ADD COLUMN model TEXT")
     } catch {
       /* 列已存在 */
     }

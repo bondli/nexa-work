@@ -73,6 +73,8 @@ export class RelayClient {
 
   private relayUrl = ""
   private paired = new Map<string, PairedDevice>()
+  /** 本机自定义的设备名（deviceId → 别名）；中继只保存手机上报的名字，改名只在本机生效 */
+  private aliases = new Map<string, string>()
   private pendingPairing: PendingPairing | null = null
   private lastError: string | null = null
   private pendingPairingTimer: ReturnType<typeof setTimeout> | null = null
@@ -161,10 +163,27 @@ export class RelayClient {
   /** 解绑手机 */
   async unbind(deviceId: string): Promise<void> {
     this.paired.delete(deviceId)
+    this.aliases.delete(deviceId)
     this.savePairedCache()
     if (this.connected) {
       this.send("relay:unbind", { deviceId })
     }
+    this.emit()
+  }
+
+  /**
+   * 重命名已配对设备
+   * 别名只落本机 relay-state.json：中继的配对记录由手机上报名字，桌面端没有改写权限，
+   * 所以每次收到 relay:hello / relay:paired 都再用别名覆盖一次，避免被服务端名字冲掉。
+   */
+  rename(deviceId: string, name: string): void {
+    const next = (name ?? "").trim().slice(0, 32)
+    if (!next) throw new Error("设备名称不能为空")
+    const d = this.paired.get(deviceId)
+    if (!d) throw new Error("设备不存在或已解绑")
+    d.name = next
+    this.aliases.set(deviceId, next)
+    this.savePairedCache()
     this.emit()
   }
 
@@ -307,13 +326,14 @@ export class RelayClient {
     switch (msg.type) {
       case "relay:hello": {
         const list = (msg.payload?.paired ?? []) as PairedDevice[]
-        this.paired = new Map(list.map((d) => [d.deviceId, d]))
+        // 服务端下发的是手机上报的名字，本机改过名的要用别名覆盖
+        this.paired = new Map(list.map((d) => [d.deviceId, this.applyAlias(d)]))
         this.savePairedCache()
         this.emit()
         return
       }
       case "relay:paired": {
-        const d = msg.payload as PairedDevice
+        const d = this.applyAlias(msg.payload as PairedDevice)
         this.paired.set(d.deviceId, { ...d, online: true })
         this.savePairedCache()
         this.emit()
@@ -342,6 +362,7 @@ export class RelayClient {
       case "relay:unbound": {
         if (msg.payload?.deviceId) {
           this.paired.delete(msg.payload.deviceId)
+          this.aliases.delete(msg.payload.deviceId)
           this.savePairedCache()
           this.emit()
         }
@@ -571,12 +592,25 @@ export class RelayClient {
     this.onStatusChange(this.getStatus())
   }
 
+  /** 若本机给该设备改过名，用别名覆盖服务端下发的名字 */
+  private applyAlias(d: PairedDevice): PairedDevice {
+    const alias = this.aliases.get(d.deviceId)
+    return alias ? { ...d, name: alias } : d
+  }
+
   private loadPairedCache(): void {
     try {
       if (existsSync(STATE_FILE)) {
-        const raw = JSON.parse(readFileSync(STATE_FILE, "utf8")) as { paired?: PairedDevice[] }
+        const raw = JSON.parse(readFileSync(STATE_FILE, "utf8")) as {
+          paired?: PairedDevice[]
+          /** 本机自定义设备名（新增字段，旧缓存没有则视为空） */
+          renames?: Record<string, string>
+        }
+        for (const [deviceId, name] of Object.entries(raw.renames ?? {})) {
+          if (deviceId && typeof name === "string" && name.trim()) this.aliases.set(deviceId, name)
+        }
         for (const d of raw.paired ?? []) {
-          if (d?.deviceId) this.paired.set(d.deviceId, { ...d, online: false })
+          if (d?.deviceId) this.paired.set(d.deviceId, { ...this.applyAlias(d), online: false })
         }
       }
     } catch {
@@ -588,7 +622,10 @@ export class RelayClient {
     try {
       const dir = join(homedir(), ".nexa")
       if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-      const data = { paired: [...this.paired.values()].map(({ deviceId, name, pairedAt }) => ({ deviceId, name, pairedAt })) }
+      const data = {
+        paired: [...this.paired.values()].map(({ deviceId, name, pairedAt }) => ({ deviceId, name, pairedAt })),
+        renames: Object.fromEntries(this.aliases),
+      }
       writeFileSync(STATE_FILE, JSON.stringify(data, null, 2))
     } catch {
       /* 缓存写失败忽略 */

@@ -15,23 +15,22 @@ import {
 import { Stack, useLocalSearchParams, useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import Markdown from "react-native-markdown-display"
+import * as Clipboard from "expo-clipboard"
 import {
   ArrowUp,
-  CheckCircle2,
+  Check,
   ChevronDown,
   ChevronRight,
+  Copy,
   FileText,
-  Loader2,
-  Pause,
   Plus,
-  Terminal,
+  Wrench,
   X,
-  XCircle,
 } from "lucide-react-native"
 import { useTheme, useChatFontSize, type ThemeColors } from "@/lib/theme"
 import { useRelayStore, type RunMeta } from "@/lib/relay/service"
 import { pickAndCompressImages, type PickedImage } from "@/lib/image-picker"
-import type { ArtifactItem, ChatMessage } from "@/lib/relay/protocol"
+import type { ArtifactItem, ChatMessage, TokenUsage } from "@/lib/relay/protocol"
 
 /** 稳定的空数组引用：zustand v5 + useSyncExternalStore 下，选择器每次返回新建 []
  * 会导致快照永远变化 → 无限重渲染 → Maximum update depth 崩溃（点进详情必崩的根因） */
@@ -41,10 +40,14 @@ const EMPTY_ARTIFACTS: ArtifactItem[] = []
 /** 历史轨迹的空引用（同上） */
 const EMPTY_RUNS: Record<string, RunMeta> = {}
 
+/** 应用图标（消息头部头像，对齐桌面端用应用 Logo） */
+const APP_ICON = require("../../../assets/icon.png")
+
 // ==========================================
-// 任务轨迹（对齐桌面端 RunTrace）
+// 任务轨迹（对齐桌面端 ai-elements Task）
 // 一条 user 消息触发的一轮 agent loop 为一个任务组；
-// 结束后思考/工具调用收拢成「任务耗时 X分Y秒 · N 次工具调用」摘要条，最终回答常显。
+// 执行过程收进最终回答：头像+Nexa 下方一行灰色「已完成 42s ›」，点击展开，
+// 运行中默认展开、结束后自动收拢，最终回答常显。
 // ==========================================
 
 interface RunGroupData {
@@ -72,91 +75,54 @@ function buildRunGroups(messages: ChatMessage[]): RunGroupData[] {
   return groups
 }
 
-/** 耗时格式化：59秒 / 2分30秒 / 1小时05分（与桌面端一致） */
+/** 耗时格式化：42s / 2m30s / 1h05m（与桌面端一致） */
 function formatRunDuration(ms: number): string {
   const total = Math.max(0, Math.round(ms / 1000))
-  if (total < 60) return `${total}秒`
+  if (total < 60) return `${total}s`
   const mins = Math.floor(total / 60)
   const secs = total % 60
-  if (mins < 60) return `${mins}分${secs}秒`
-  return `${Math.floor(mins / 60)}小时${String(mins % 60).padStart(2, "0")}分`
+  if (mins < 60) return `${mins}m${String(secs).padStart(2, "0")}s`
+  return `${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, "0")}m`
 }
 
-/** 轨迹摘要条：运行中默认展开，结束后自动收拢 */
-function RunTrace({
-  meta,
-  running,
-  toolCount,
-  colors: t,
-  children,
-}: {
-  meta: RunMeta
-  running: boolean
-  toolCount: number
-  colors: ThemeColors
-  children: React.ReactNode
-}) {
-  const [open, setOpen] = useState(running)
-  const prevRunning = useRef(running)
-  useEffect(() => {
-    // 运行中展开跟随，收到结束事件时自动收拢（对齐桌面端）
-    if (prevRunning.current && !running) setOpen(false)
-    prevRunning.current = running
-  }, [running])
+/** token 数量格式化：946 / 5.5k / 1.3M（与桌面端一致） */
+function formatTokens(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "0"
+  if (n < 1000) return String(Math.round(n))
+  if (n < 1_000_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`
+  return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`
+}
 
-  const failed = meta.status === "failed"
-  const paused = meta.status === "paused"
-  const title = running ? "任务执行中…" : failed ? "任务失败" : paused ? "任务已暂停" : "任务耗时"
-  const duration = !running && meta.durationMs != null ? formatRunDuration(meta.durationMs) : null
+/** provider/modelId → 显示名（与桌面端 formatModelName 保持同步） */
+function formatModelName(model?: string | null): string | null {
+  if (!model) return null
+  const map: Record<string, string> = {
+    "deepseek/deepseek-v4-flash": "DeepSeek V4 Flash",
+    "deepseek/deepseek-v4-pro": "DeepSeek V4 Pro",
+    "deepseek/deepseek-v3.2": "DeepSeek V3.2",
+  }
+  return map[model] ?? model.split("/").pop() ?? model
+}
 
-  const s = useMemo(
-    () =>
-      StyleSheet.create({
-        bar: {
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 6,
-          borderWidth: 1,
-          borderColor: t.border,
-          backgroundColor: "rgba(115,115,115,0.08)",
-          borderRadius: 10,
-          paddingHorizontal: 10,
-          paddingVertical: 8,
-        },
-        title: { color: t.textSecondary, fontSize: 12, fontWeight: "600" },
-        duration: { color: t.textMuted, fontSize: 12 },
-        tools: { flexDirection: "row", alignItems: "center", gap: 3, marginLeft: "auto", paddingLeft: 8 },
-        toolsText: { color: t.textMuted, fontSize: 11 },
-        body: { gap: 8, marginTop: 8 },
-      }),
-    [t]
-  )
+/** token 用量 → 总数（历史数据可能只有 input/output） */
+function totalTokensOf(usage?: TokenUsage | null): number {
+  if (!usage) return 0
+  return usage.totalTokens ?? (usage.input ?? 0) + (usage.output ?? 0)
+}
 
-  const statusIcon = running ? (
-    <Loader2 size={13} color={t.accent} />
-  ) : failed ? (
-    <XCircle size={13} color={t.danger} />
-  ) : paused ? (
-    <Pause size={13} color="#f59e0b" />
-  ) : (
-    <CheckCircle2 size={13} color={t.success} />
-  )
-
-  return (
-    <>
-      <Pressable style={s.bar} onPress={() => setOpen((v) => !v)} accessibilityLabel="展开或收起任务轨迹">
-        {open ? <ChevronDown size={13} color={t.textMuted} /> : <ChevronRight size={13} color={t.textMuted} />}
-        {statusIcon}
-        <Text style={s.title}>{title}</Text>
-        {duration ? <Text style={s.duration}>{duration}</Text> : null}
-        <View style={s.tools}>
-          <Terminal size={11} color={t.textMuted} />
-          <Text style={s.toolsText}>{toolCount} 次工具调用</Text>
-        </View>
-      </Pressable>
-      {open ? <View style={s.body}>{children}</View> : null}
-    </>
-  )
+/** 消息时间：今天 HH:mm / 昨天 HH:mm / M/D HH:mm（兼容秒级与毫秒级时间戳） */
+function formatMessageTime(input?: number): string {
+  if (!input) return ""
+  const ms = input < 1e12 ? input * 1000 : input
+  const d = new Date(ms)
+  const now = new Date()
+  const hh = String(d.getHours()).padStart(2, "0")
+  const mm = String(d.getMinutes()).padStart(2, "0")
+  if (d.toDateString() === now.toDateString()) return `${hh}:${mm}`
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  if (d.toDateString() === yesterday.toDateString()) return `昨天 ${hh}:${mm}`
+  return `${d.getMonth() + 1}/${d.getDate()} ${hh}:${mm}`
 }
 
 /** 历史数据无 run 事件：用组内消息时间戳（秒）合成轨迹元数据 */
@@ -171,12 +137,176 @@ function synthMeta(items: ChatMessage[], toolCount: number): RunMeta {
   }
 }
 
+/** 轨迹折叠条：一行灰色小字「已完成 42s ›」 */
+function TraceBar({
+  status,
+  durationLabel,
+  colors: t,
+  children,
+}: {
+  status: RunMeta["status"]
+  durationLabel: string | null
+  colors: ThemeColors
+  children: React.ReactNode
+}) {
+  const [open, setOpen] = useState(status === "running")
+  const prevStatus = useRef(status)
+  useEffect(() => {
+    // 运行中自动展开；收到结束事件时自动收拢（对齐桌面端）
+    if (status === "running") setOpen(true)
+    else if (prevStatus.current === "running") setOpen(false)
+    prevStatus.current = status
+  }, [status])
+
+  const label =
+    status === "running"
+      ? "执行中"
+      : status === "failed"
+        ? "失败"
+        : status === "paused"
+          ? "已暂停"
+          : "已完成"
+
+  const s = useMemo(
+    () =>
+      StyleSheet.create({
+        bar: { flexDirection: "row", alignItems: "center", gap: 3, paddingVertical: 2 },
+        text: { color: t.textMuted, fontSize: 11 },
+        body: {
+          gap: 8,
+          marginTop: 2,
+          paddingLeft: 10,
+          borderLeftWidth: 1,
+          borderLeftColor: t.border,
+        },
+      }),
+    [t]
+  )
+
+  return (
+    <>
+      <Pressable style={s.bar} onPress={() => setOpen((v) => !v)} accessibilityLabel="展开或收起任务轨迹">
+        <Text style={s.text}>
+          {label}
+          {status !== "running" && durationLabel ? ` ${durationLabel}` : ""}
+        </Text>
+        {open ? <ChevronDown size={12} color={t.textMuted} /> : <ChevronRight size={12} color={t.textMuted} />}
+      </Pressable>
+      {open ? <View style={s.body}>{children}</View> : null}
+    </>
+  )
+}
+
+/** 思考过程：流式中自动展开，正文到达后延迟收拢（对齐桌面端 Reasoning） */
+function ThoughtBlock({
+  text,
+  streaming,
+  colors: t,
+}: {
+  text: string
+  streaming: boolean
+  colors: ThemeColors
+}) {
+  const [open, setOpen] = useState(streaming)
+  const wasStreaming = useRef(streaming)
+  useEffect(() => {
+    if (streaming) {
+      wasStreaming.current = true
+      setOpen(true)
+      return
+    }
+    if (!wasStreaming.current) return
+    wasStreaming.current = false
+    const timer = setTimeout(() => setOpen(false), 600)
+    return () => clearTimeout(timer)
+  }, [streaming])
+
+  const s = useMemo(
+    () =>
+      StyleSheet.create({
+        wrap: { gap: 3 },
+        head: { flexDirection: "row", alignItems: "center", gap: 3 },
+        title: { color: t.textMuted, fontSize: 11 },
+        body: {
+          marginTop: 2,
+          paddingLeft: 8,
+          borderLeftWidth: 2,
+          borderLeftColor: t.border,
+        },
+        text: { color: t.textMuted, fontSize: 11, lineHeight: 17 },
+      }),
+    [t]
+  )
+
+  return (
+    <View style={s.wrap}>
+      <Pressable style={s.head} onPress={() => setOpen((v) => !v)} accessibilityLabel="展开或收起思考过程">
+        <Text style={s.title}>{streaming ? "思考中…" : "思考过程"}</Text>
+        {open ? <ChevronDown size={12} color={t.textMuted} /> : <ChevronRight size={12} color={t.textMuted} />}
+      </Pressable>
+      {open ? (
+        <View style={s.body}>
+          <Text style={s.text}>{text}</Text>
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+/** 工具调用：弱化一行（图标 + 名称 + 状态），点开看输出 */
+function ToolRow({
+  name,
+  content,
+  isError,
+  colors: t,
+}: {
+  name: string
+  content: string
+  isError: boolean
+  colors: ThemeColors
+}) {
+  const [open, setOpen] = useState(false)
+  const s = useMemo(
+    () =>
+      StyleSheet.create({
+        row: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 3 },
+        name: { color: t.textMuted, fontSize: 11 },
+        state: { color: isError ? t.danger : t.textMuted, fontSize: 11, marginLeft: 2 },
+        out: {
+          marginTop: 2,
+          paddingLeft: 8,
+          borderLeftWidth: 2,
+          borderLeftColor: t.border,
+          color: t.textMuted,
+          fontSize: 11,
+          lineHeight: 16,
+          fontFamily: "Menlo",
+        },
+      }),
+    [t, isError]
+  )
+
+  return (
+    <View>
+      <Pressable style={s.row} onPress={() => setOpen((v) => !v)} accessibilityLabel={`展开工具 ${name} 输出`}>
+        <Wrench size={12} color={t.textMuted} />
+        <Text style={s.name} numberOfLines={1}>
+          {name}
+        </Text>
+        {isError ? <Text style={s.state}>· 失败</Text> : null}
+        {open ? <ChevronDown size={12} color={t.textMuted} /> : <ChevronRight size={12} color={t.textMuted} />}
+      </Pressable>
+      {open && content ? <Text style={s.out}>{content}</Text> : null}
+    </View>
+  )
+}
+
 /** Markdown 配色（对齐桌面端）：入参为当前主题色 + 消息字号（设置页字体设置，12/14/16） */
 function makeMdStyles(t: ThemeColors, size: number) {
   return {
-    body: { color: t.textSecondary, fontSize: size, lineHeight: Math.round(size * 1.5) },
+    body: { color: t.text, fontSize: size, lineHeight: Math.round(size * 1.5) },
     strong: { color: t.text, fontWeight: "700" },
-    em: { color: t.textSecondary },
+    em: { color: t.text },
     heading1: { color: t.text, fontSize: size + 3.5, fontWeight: "700", marginTop: 8, marginBottom: 4 },
     heading2: { color: t.text, fontSize: size + 2, fontWeight: "700", marginTop: 8, marginBottom: 4 },
     heading3: { color: t.text, fontSize: size + 1, fontWeight: "600", marginTop: 6, marginBottom: 3 },
@@ -232,21 +362,12 @@ export default function SessionScreen() {
 
   const [text, setText] = useState("")
   const [sending, setSending] = useState(false)
+  /** 刚复制过的消息 id（1.5s 内显示对勾反馈） */
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   // 待发送图片附件（+ 号选图，随消息上传；桌面端落盘后可由 Agent 收藏入知识库）
   const [pendingImages, setPendingImages] = useState<PickedImage[]>([])
   const [picking, setPicking] = useState(false)
-  // 思考过程 / 工具调用的展开集合（默认全部收拢）
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const listRef = useRef<FlatList<RunGroupData>>(null)
-
-  const toggleTrace = useCallback((key: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }, [])
 
   // 任务产物（md/html 文档卡，点击预览）
   const artifacts = useRelayStore((s) => s.artifacts[sessionId]) ?? EMPTY_ARTIFACTS
@@ -318,44 +439,30 @@ export default function SessionScreen() {
   const styles = useMemo(
     () =>
       StyleSheet.create({
-        /* 思考过程：弱化（小字/灰色/半透明块），默认收拢 */
-        thinkingBlock: {
-          backgroundColor: "rgba(115,115,115,0.12)",
-          borderLeftColor: t.textMuted,
-          borderLeftWidth: 2,
-          borderRadius: 6,
-          paddingHorizontal: 8,
-          paddingVertical: 6,
-          marginBottom: 8,
-        },
-        thinkingTitle: { color: t.textMuted, fontSize: 12, fontWeight: "600" },
-        thinkingText: { color: t.textMuted, fontSize: 12, lineHeight: 18, fontStyle: "italic", marginTop: 4 },
-        /* 工具调用：弱化 + 可展开（位于轨迹展开区内，左缘与消息对齐） */
-        traceBlock: {
-          alignSelf: "stretch",
-          marginVertical: 2,
-          paddingHorizontal: 10,
-          paddingVertical: 6,
-          borderRadius: 8,
-          backgroundColor: "rgba(115,115,115,0.08)",
-        },
-        traceHead: { flexDirection: "row", alignItems: "center", gap: 4 },
-        traceTitle: { color: t.textMuted, fontSize: 11, fontWeight: "600" },
-        traceText: { color: t.textMuted, fontSize: 11, lineHeight: 16, fontFamily: "Menlo", marginTop: 4 },
         container: { flex: 1, backgroundColor: t.bg },
-        listContent: { padding: 12, gap: 10 },
+        listContent: { padding: 12, gap: 14 },
         // 任务组：组内间距略小，组间由 listContent.gap 控制
         group: { gap: 8 },
         empty: { padding: 40, alignItems: "center" },
-        bubbleRow: { flexDirection: "row" },
-        bubbleRowRight: { justifyContent: "flex-end" },
-        bubbleRowLeft: { justifyContent: "flex-start" },
-        bubble: { maxWidth: "82%", borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 },
-        bubbleUser: { backgroundColor: t.bubbleUser },
-        bubbleAssistant: { backgroundColor: t.border },
-        bubbleText: { fontSize: chatFontSize, lineHeight: Math.round(chatFontSize * 1.4) },
-        bubbleTextUser: { color: t.bubbleUserText },
-        bubbleTextAssistant: { color: t.text },
+        /* 用户消息：右侧实底气泡（对齐桌面端，助手消息不再套气泡） */
+        userRow: { flexDirection: "row", justifyContent: "flex-end" },
+        userBubble: {
+          maxWidth: "82%",
+          borderRadius: 16,
+          borderTopRightRadius: 6,
+          paddingHorizontal: 14,
+          paddingVertical: 10,
+          backgroundColor: t.bubbleUser,
+        },
+        userText: { fontSize: chatFontSize, lineHeight: Math.round(chatFontSize * 1.4), color: t.bubbleUserText },
+        /* 助手消息：文档式排版，头像与 Nexa 同一行 */
+        assistantBlock: { gap: 4 },
+        headerRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+        avatar: { width: 18, height: 18, borderRadius: 5 },
+        name: { color: t.text, fontSize: 12, fontWeight: "600" },
+        /* 底栏：时间 · 模型 · token（灰色小字，与桌面端一致） */
+        metaRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 5, marginTop: 2 },
+        metaText: { color: t.textMuted, fontSize: 10 },
         composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, padding: 12, borderTopWidth: 1, borderTopColor: t.border },
         input: {
           flex: 1, backgroundColor: t.card, color: t.text, borderRadius: 12, paddingHorizontal: 14,
@@ -385,7 +492,6 @@ export default function SessionScreen() {
         attFallbackText: { color: t.bubbleUserText, fontSize: 11 },
         // 任务产物文件卡（左侧与消息气泡对齐，外边距由列表 padding 提供）
         artifactWrap: { marginTop: 4, gap: 8 },
-        artifactTitle: { color: t.textMuted, fontSize: 11, fontWeight: "600" },
         artifactCard: {
           flexDirection: "row",
           alignItems: "center",
@@ -412,66 +518,134 @@ export default function SessionScreen() {
     )
   }, [mdStyles])
 
-  /** 单条消息气泡 */
-  const renderMessage = (item: ChatMessage) => {
-    const isUser = item.role === "user"
-    // 思考过程 / 工具详情：点击标题行展开（外层轨迹条默认收拢）
-    const traceKey = `trace-${item.id}`
-    const traceOpen = expanded.has(traceKey)
+  /** 复制助手消息正文到系统剪贴板（1.5s 后恢复图标） */
+  const copyMessage = useCallback(async (id: string, content: string) => {
+    await Clipboard.setStringAsync(content)
+    setCopiedId(id)
+    setTimeout(() => setCopiedId((v) => (v === id ? null : v)), 1500)
+  }, [])
+
+  /**
+   * 单条消息（对齐桌面端 MessageBubble）
+   * - 用户：右侧实底气泡
+   * - 助手：顶部「Logo + Nexa」→ 轨迹折叠条 → 思考过程 → 正文 → 底栏（时间/模型/token）
+   * - 工具：弱化一行，点击展开输出
+   * embedded=true 表示消息位于轨迹展开区内部（不重复头像/底栏）
+   */
+  const renderMessage = (
+    item: ChatMessage,
+    trace?: { status: RunMeta["status"]; durationLabel: string | null; children: ChatMessage[] },
+    embedded = false,
+    artifactList?: ArtifactItem[]
+  ) => {
     if (item.role === "tool") {
       return (
-        <Pressable key={item.id} style={styles.traceBlock} onPress={() => toggleTrace(traceKey)}>
-          <View style={styles.traceHead}>
-            {traceOpen ? <ChevronDown size={12} color={t.textMuted} /> : <ChevronRight size={12} color={t.textMuted} />}
-            <Text style={styles.traceTitle}>工具调用 · {item.toolName ?? "tool"}{item.isError ? "（失败）" : ""}</Text>
-          </View>
-          {traceOpen && item.content ? <Text style={styles.traceText}>{String(item.content)}</Text> : null}
-        </Pressable>
+        <ToolRow
+          key={item.id}
+          name={item.toolName ?? "tool"}
+          content={String(item.content ?? "")}
+          isError={!!item.isError}
+          colors={t}
+        />
       )
     }
-    // 助手消息：思考过程（收拢）+ 正文（Markdown）
-    return (
-      <View key={item.id} style={[styles.bubbleRow, isUser ? styles.bubbleRowRight : styles.bubbleRowLeft]}>
-        <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
-          {item.thinking ? (
-            <Pressable style={styles.thinkingBlock} onPress={() => toggleTrace(traceKey)}>
-              <View style={styles.traceHead}>
-                {traceOpen ? <ChevronDown size={12} color={t.textMuted} /> : <ChevronRight size={12} color={t.textMuted} />}
-                <Text style={styles.thinkingTitle}>思考过程</Text>
+
+    if (item.role === "user") {
+      return (
+        <View key={item.id} style={styles.userRow}>
+          <View style={styles.userBubble}>
+            {/* 图片附件（session:messages 下发 dataUrl；超限未带 dataUrl 时显示文件名占位） */}
+            {item.attachments?.length ? (
+              <View style={styles.attRow}>
+                {item.attachments.map((a, i) =>
+                  a.dataUrl ? (
+                    <Image key={`${item.id}-att-${i}`} source={{ uri: a.dataUrl }} style={styles.attImage} resizeMode="cover" />
+                  ) : (
+                    <View key={`${item.id}-att-${i}`} style={[styles.attImage, styles.attFallback]}>
+                      <Text style={styles.attFallbackText} numberOfLines={2}>{a.name}</Text>
+                    </View>
+                  )
+                )}
               </View>
-              {traceOpen ? <Text style={styles.thinkingText}>{String(item.thinking)}</Text> : null}
-            </Pressable>
-          ) : null}
-          {isUser ? (
-            <View>
-              {/* 图片附件（session:messages 下发 dataUrl；超限未带 dataUrl 时显示文件名占位） */}
-              {item.attachments?.length ? (
-                <View style={styles.attRow}>
-                  {item.attachments.map((a, i) =>
-                    a.dataUrl ? (
-                      <Image key={`${item.id}-att-${i}`} source={{ uri: a.dataUrl }} style={styles.attImage} resizeMode="cover" />
-                    ) : (
-                      <View key={`${item.id}-att-${i}`} style={[styles.attImage, styles.attFallback]}>
-                        <Text style={styles.attFallbackText} numberOfLines={2}>{a.name}</Text>
-                      </View>
-                    )
-                  )}
-                </View>
-              ) : null}
-              {item.content ? (
-                <Text style={[styles.bubbleText, styles.bubbleTextUser]}>{String(item.content)}</Text>
-              ) : null}
-            </View>
-          ) : (
-            assistantBody(String(item.content ?? ""))
-          )}
+            ) : null}
+            {item.content ? <Text style={styles.userText}>{String(item.content)}</Text> : null}
+          </View>
         </View>
+      )
+    }
+
+    // 助手消息
+    const body = String(item.content ?? "")
+    // 仅流式中的消息带 done=false；历史消息没有该字段，不能当作流式
+    const streaming = item.done === false
+    const timeLabel = formatMessageTime(item.createdAt)
+    const modelLabel = formatModelName(item.model)
+    const total = totalTokensOf(item.usage)
+    const metaParts = [timeLabel, modelLabel, total > 0 ? `${formatTokens(total)} tokens` : ""].filter(Boolean)
+
+    return (
+      <View key={item.id} style={embedded ? undefined : styles.assistantBlock}>
+        {!embedded ? (
+          <View style={styles.headerRow}>
+            <Image source={APP_ICON} style={styles.avatar} resizeMode="cover" />
+            <Text style={styles.name}>Nexa</Text>
+          </View>
+        ) : null}
+        {trace ? (
+          <TraceBar status={trace.status} durationLabel={trace.durationLabel} colors={t}>
+            {trace.children.map((m) => renderMessage(m, undefined, true))}
+          </TraceBar>
+        ) : null}
+        {item.thinking ? (
+          <ThoughtBlock text={String(item.thinking)} streaming={streaming && !body} colors={t} />
+        ) : null}
+        {body ? assistantBody(body) : null}
+        {/* 任务产物卡：与桌面端一致，放在最终回答正文之后、时间/模型/token 底栏之前 */}
+        {!embedded && artifactList?.length ? (
+          <View style={styles.artifactWrap}>
+            {artifactList.map((a) => (
+              <Pressable
+                key={a.relPath}
+                style={styles.artifactCard}
+                onPress={() =>
+                  router.push(`/artifact/${sessionId}?path=${encodeURIComponent(a.relPath)}&name=${encodeURIComponent(a.name)}`)
+                }
+                accessibilityLabel={`预览 ${a.name}`}
+              >
+                <FileText size={18} color={t.accent} />
+                <View style={styles.artifactBody}>
+                  <Text style={styles.artifactName} numberOfLines={1}>{a.name}</Text>
+                  <Text style={styles.artifactMeta} numberOfLines={1}>{a.relPath}</Text>
+                </View>
+                <ChevronRight size={16} color={t.textMuted} />
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        {/* 底栏：复制图标 + 时间 · 模型 · token（与桌面端 MessageActions 顺序一致） */}
+        {!embedded && !streaming && body ? (
+          <View style={styles.metaRow}>
+            <Pressable
+              onPress={() => void copyMessage(item.id, body)}
+              hitSlop={8}
+              accessibilityLabel="复制消息内容"
+            >
+              {copiedId === item.id ? (
+                <Check size={12} color={t.textMuted} />
+              ) : (
+                <Copy size={12} color={t.textMuted} />
+              )}
+            </Pressable>
+            {metaParts.length > 0 ? <Text style={styles.metaText}>{metaParts.join(" · ")}</Text> : null}
+          </View>
+        ) : null}
       </View>
     )
   }
 
   /**
-   * 任务组：用户消息 → 轨迹摘要条（收拢思考/工具）→ 最终回答常显
+   * 任务组：用户消息 → 最终回答（内嵌轨迹条）→ 常显正文
+   * 运行中 / 无最终回答：轨迹条独立展示
    * 无工具调用的普通问答不显示轨迹条（对齐桌面端 RunGroupView）
    */
   const renderGroup = ({ item: group }: { item: RunGroupData }) => {
@@ -499,18 +673,33 @@ export default function SessionScreen() {
       }
     }
 
+    const trace =
+      toolCount > 0
+        ? {
+            // 运行中保持 running；结束后用历史/实时状态
+            status: (running ? "running" : meta.status) as RunMeta["status"],
+            durationLabel: !running && meta.durationMs != null ? formatRunDuration(meta.durationMs) : null,
+            children: items.filter((_, i) => i !== finalIdx),
+          }
+        : null
+
+    // 产物卡挂在最后一轮的最终回答上（对齐桌面端 artifactAnchorId：正文之后、底栏之前）
+    const anchorId = isLast && !messagesLoading && artifacts.length > 0 ? items[finalIdx]?.id : undefined
+
     return (
       <View style={styles.group}>
         {group.user ? renderMessage(group.user) : null}
         {toolCount === 0 ? (
-          items.map(renderMessage)
+          items.map((m) => renderMessage(m, undefined, false, m.id === anchorId ? artifacts : undefined))
+        ) : finalIdx >= 0 ? (
+          renderMessage(items[finalIdx], trace ?? undefined, false, anchorId ? artifacts : undefined)
         ) : (
-          <>
-            <RunTrace meta={meta} running={running} toolCount={toolCount} colors={t}>
-              {items.filter((_, i) => i !== finalIdx).map(renderMessage)}
-            </RunTrace>
-            {finalIdx >= 0 ? renderMessage(items[finalIdx]) : null}
-          </>
+          // 运行中 / 无最终回答：轨迹条独立展示在用户消息之后
+          trace && (
+            <TraceBar status={trace.status} durationLabel={trace.durationLabel} colors={t}>
+              {trace.children.map((m) => renderMessage(m, undefined, true))}
+            </TraceBar>
+          )
         )}
       </View>
     )
@@ -528,34 +717,10 @@ export default function SessionScreen() {
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <ActivityIndicator color={t.accent} />
+            {messagesLoading ? <ActivityIndicator color={t.accent} /> : null}
           </View>
         }
         renderItem={renderGroup}
-        ListFooterComponent={
-          !messagesLoading && artifacts.length > 0 ? (
-            <View style={styles.artifactWrap}>
-              <Text style={styles.artifactTitle}>生成的产物</Text>
-              {artifacts.map((a) => (
-                <Pressable
-                  key={a.relPath}
-                  style={styles.artifactCard}
-                  onPress={() =>
-                    router.push(`/artifact/${sessionId}?path=${encodeURIComponent(a.relPath)}&name=${encodeURIComponent(a.name)}`)
-                  }
-                  accessibilityLabel={`预览 ${a.name}`}
-                >
-                  <FileText size={18} color={t.accent} />
-                  <View style={styles.artifactBody}>
-                    <Text style={styles.artifactName} numberOfLines={1}>{a.name}</Text>
-                    <Text style={styles.artifactMeta} numberOfLines={1}>{a.relPath}</Text>
-                  </View>
-                  <ChevronRight size={16} color={t.textMuted} />
-                </Pressable>
-              ))}
-            </View>
-          ) : undefined
-        }
       />
 
       <View>

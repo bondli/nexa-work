@@ -11,6 +11,13 @@ import { Input } from "@renderer/components/ui/input"
 import { Card } from "@renderer/components/ui/card"
 import { Badge } from "@renderer/components/ui/badge"
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@renderer/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@renderer/components/ui/select"
 import { useConversationStore } from "@renderer/stores/conversation-store"
 import { useThemeStore } from "@renderer/stores/theme-store"
 import { useSettingsOpen } from "@renderer/stores/ui-store"
@@ -387,16 +394,16 @@ export function SettingsDialog() {
                       <p className="text-sm font-medium">通知提示音</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">收到桌面或应用内通知时播放的提示音。</p>
                     </div>
-                    <select
-                      value={noticeSound}
-                      onChange={(e) => changeNoticeSound(e.target.value)}
-                      aria-label="通知提示音"
-                      className="h-8 w-[110px] shrink-0 rounded-md border border-input bg-transparent px-2 text-xs shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {NOTICE_SOUND_OPTIONS.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
+                    <Select value={noticeSound} onValueChange={changeNoticeSound}>
+                      <SelectTrigger className="h-8 w-[110px] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {NOTICE_SOUND_OPTIONS.map((s) => (
+                          <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* 定时任务产物通知 */}
@@ -476,16 +483,17 @@ export function SettingsDialog() {
                             </div>
                             <div>
                               <label className="mb-1 block text-[11px] text-muted-foreground">默认模型</label>
-                              <select
-                                value={currentForProvider}
-                                onChange={(e) => setSelectedModel(e.target.value)}
-                                className="h-8 w-full rounded-md border border-input bg-transparent px-2 text-xs shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                              >
-                                {models.length === 0 && <option value="">无可用模型</option>}
-                                {models.map((m: ModelInfo) => (
-                                  <option key={m.id} value={m.id}>{m.modelId || m.id}</option>
-                                ))}
-                              </select>
+                              <Select value={currentForProvider} onValueChange={setSelectedModel}>
+                                <SelectTrigger className="h-8 w-full text-xs">
+                                  <SelectValue placeholder={models.length === 0 ? "无可用模型" : undefined} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {models.length === 0 && <SelectItem value="" className="text-xs" disabled>无可用模型</SelectItem>}
+                                  {models.map((m: ModelInfo) => (
+                                    <SelectItem key={m.id} value={m.id} className="text-xs">{m.modelId || m.id}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
                           </div>
                         ) : (

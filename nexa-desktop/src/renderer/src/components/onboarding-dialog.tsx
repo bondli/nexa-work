@@ -5,6 +5,13 @@
 import { useState, useEffect } from "react"
 import { Bot, ChevronRight, ChevronLeft, Check, Sparkles } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@renderer/components/ui/select"
 import { cn } from "@renderer/lib/utils"
 import { useConversationStore } from "@renderer/stores/conversation-store"
 
@@ -139,19 +146,20 @@ export function OnboardingDialog({ onClose }: { onClose: () => void }) {
               <div className="space-y-4">
                 <div>
                   <label className="mb-1.5 block text-sm font-medium">默认模型</label>
-                  <select
-                    value={selectedModel}
-                    onChange={(e) => setSelectedModel(e.target.value)}
-                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {models.length > 0 ? (
-                      models.map((m) => (
-                        <option key={m.id} value={m.id}>{m.displayName}</option>
-                      ))
-                    ) : (
-                      <option value="deepseek/deepseek-v4-flash">DeepSeek V4 Flash</option>
-                    )}
-                  </select>
+                  <Select value={selectedModel} onValueChange={setSelectedModel}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {models.length > 0 ? (
+                        models.map((m) => (
+                          <SelectItem key={m.id} value={m.id}>{m.displayName}</SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="deepseek/deepseek-v4-flash">DeepSeek V4 Flash</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium">

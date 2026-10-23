@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- 桌面端：已配对设备支持重命名（设置 → 手机配对，设备行新增铅笔按钮 + 改名弹框，最长 32 字）。名称以本机别名形式保存在 `~/.nexa/relay-state.json` 的 `renames` 字段，并在每次收到 `relay:hello` / `relay:paired` 时覆盖服务端下发的手机名，避免重连后被冲回原名；解绑时同步清除别名。新增 IPC `relay:rename`（preload 暴露 `window.nexa.relayRename`）
 - 通用设置新增「字体大小」选项（12/14/16px，持久化到 settings.chatFontSize），经 `--chat-font-size` CSS 变量仅作用于会话消息内容
 - 会话消息流末尾新增「生成的产物」文件卡（Markdown/HTML/PDF 等文档类文件），点击直达右侧产物面板并自动展开父目录定位预览（artifacts-store 新增 openArtifact）
 - 本地实现 shadcn ai-elements 组件（Conversation / Message / MessageContent / Response / Tool / PlanCard，API 对齐官方），消息展示统一组件化、降低维护成本
@@ -20,6 +21,13 @@
 - 手机端：接入系统级推送（expo-notifications）——Android 建立「任务通知」有声/静音两个通知渠道，打开开关时申请 POST_NOTIFICATIONS 权限；后台/锁屏时由系统通知提醒，前台改为应用内弹窗 + 合成提示音；Expo Go 无原生模块时自动降级为应用内提醒（不崩溃）
 
 ### Changed
+- 手机端：非 tab 页面（任务详情/资料详情/产物预览/执行记录/配对等）切入动效由 Android 默认的「缩小 0.85 → 1 + 淡入」（观感是闪一下出现）改为从右侧推入的 `slide_from_right`；新建任务/新增笔记/切换电脑三个 modal 页改为 `slide_from_bottom`
+- 手机端：任务列表卡片右侧新增进入箭头（ChevronRight），明确「点进去」的入口暗示
+- 手机端：任务详情页消息展示对齐桌面端 agentic UI——助手消息不再套灰底气泡，改为「应用 Logo + Nexa」头部 + 文档式正文；执行过程收进最终回答，头部下方一行灰色小字「已完成 42s ›」点击展开（运行中默认展开、结束收拢）；思考过程独立成块（流式中自动展开、结束收拢）、工具调用改为弱化一行（图标 + 名称 + 失败标记，点开看输出）；任务产物卡移入最终回答（正文之后、元信息之前，对齐桌面端，不再显示「生成的产物」标题），正文底部新增「复制图标 + 时间 · 模型名 · k/M 单位 token 用量」元信息，复制用 expo-clipboard，模型名与用量由中继 `session:messages` 补发 `createdAt` / `usage` 字段、assistant.done 事件补存 model / usage
+- 桌面端：任务执行消息展示由 chat UI 升级为 agentic UI（对齐 shadcn ai-elements）——一轮 agent loop 的执行过程收进最终回答，在「Logo + Nexa」同一行下方显示一行灰色小字「已完成 42s ›」，点击展开思考过程 / 工具调用 / 中间消息（运行中默认展开、结束收拢）；思考过程改用 Reasoning（流式中自动展开、结束收拢、标题 shimmer 动效）；工具调用改用 Tool 行（状态圆点 + 语义图标 + 关键参数摘要 + 耗时，展开看输入/输出）；执行计划改用 Plan（进度条 + 步骤状态）；正文改为文档式排版 + 底部常显操作栏（复制 / 时间 / 模型名 / 用量，模型名裸文字展示，复制按钮 hover 才出现），不再套描边气泡；token 数按 k/M 单位格式化（如 5.5k tokens，title 显示精确值）；新增 `components/ai-elements/{message,shimmer,reasoning,tool,task,plan}.tsx`
+- 桌面端：原生 `<select>` 全部替换为 shadcn/ui Select（new-york 风格）——新增 `components/ui/select.tsx`（@radix-ui/react-select 封装），三处替换：笔记编辑器分类选择、设置弹框通知提示音 + 默认模型、Onboarding 向导默认模型；原 `onChange={(e) => e.target.value}` 统一为 `onValueChange={(v) => ...}`
+- 桌面端：会话自动标题上限由 20 字放宽到 30 字（提示词约束 + normalizeTitle 截断 + 首条消息/定时任务的兜底标题同步）
+- 手机端：任务列表由分隔线列表改为白色圆角卡片——左侧状态图标（进行中 loading、失败红叉、暂停、完成勾），右侧两行展示任务名与更新时间
 - 桌面端：`npm run pack` 改为一次产出 mac arm64 dmg（`Nexa-0.1.0-arm64.dmg`）+ Windows x64 NSIS 安装包（`Nexa-0.1.0-x64.exe`），均免签名；Windows 目标显式锁定 x64（否则在 Apple Silicon 上会按宿主架构产出 arm64 包）并统一产物命名模板 `${productName}-${version}-${arch}.${ext}`（原为带空格的 `Nexa Setup 0.1.0.exe`），`dist` 仍只出 mac 包
 - 桌面端：mac 打包目标只保留 arm64，`npm run dist` 不再额外产出 Intel（x64）dmg
 - 手机端：任务详情页发送按钮改为圆形图标按钮（40×40 圆底 + 白色向上箭头，发送中显示加载圈），与桌面端/主流 IM 一致
@@ -49,6 +57,10 @@
 - 手机端：中继 RPC 默认超时由 30s 降至 12s，桌面端无响应时错误反馈更及时
 
 ### Fixed
+- 桌面端 + 手机端：助手消息的模型名在重新进入会话后消失——`messages` 表没有 model 列，模型标识只在流式 `assistant.done` 事件里下发、从未落库；现新增 `messages.model` 列（旧库自动 ALTER 补列）并在 `insertAssistant` 时写入 `provider/modelId`，历史加载与中继 `session:messages` 一并回传，重新进入会话仍可展示模型名（本次改动前的历史消息仍为 null）
+- 桌面端：历史消息的 token 用量不显示——`messages.listBySession` 只对 attachments 做了 JSON 反序列化，`token_usage` 仍以 TEXT 原样返回，渲染端按对象读取 `totalTokens` 得到 `undefined`、按 input+output 兜底得到 0，于是整行被隐藏；现统一在 DAO 层解析 token_usage，并把时间/用量移入常显操作栏（复制按钮 hover 才出现）
+- 桌面端：笔记编辑页切到预览态后内容较长时看不到最底部——编辑器根节点原为 `h-full`（父级还有 PageTitleBar，100% 高度导致底部溢出被裁掉），改为 `flex-1 min-h-0`；滚动区同步补 `min-h-0`，让溢出内容进入滚动而不是被裁切
+- 桌面端：笔记预览态 GFM 表格渲染不出——预览组件此前用的是手写正则版 `renderMarkdown`，只支持标题/粗体/列表/代码块，没有实现 GFM 表格（`| a | b |` + `|---|---|`）/任务列表语法，导致标准 Markdown 表格被当成普通段落输出；现已改用仓库统一的 `MarkdownRenderer`（react-markdown 9 + remark-gfm 4），表格 / 任务列表 / 删除线均正确渲染，样式与会话消息保持一致
 - 桌面端：新增单实例锁（app.requestSingleInstanceLock）——此前可同时开多个桌面端，多实例会各自用 sql.js 整库回写同一 SQLite 文件（后写覆盖先写），并以同一 deviceId 争抢中继连接（手机端表现为「一会儿在线一会儿离线」）；现在重复启动会把已有窗口唤到前台，新进程直接退出，且在 ready 前二次校验，避免未拿到锁的进程做初始化
 - 手机端：底部手势指示条区域透出白色——根布局改为 SafeAreaProvider + 按 safe-area inset 铺主题底色（画在 Stack 底层，不遮挡页面内容），浅色（#f5f5f5）/深色（#0a0a0a）均与页面背景一致；任务详情页输入框增加底部 inset 内边距，不再被手势条压住；关闭手势提示条（inset=0）时自动不渲染
 - 手机端：华为等厂商 ROM 手势提示条区域无法跟随 App 主题——app.json 改用 expo-navigation-bar 插件 `enforceContrast: false`（关闭 Android 导航栏对比度遮罩，该遮罩只跟随系统主题、会盖住应用底色），并接入 expo-system-ui 在运行时把根视图/窗口底色设为当前主题色（移除已失效的 androidNavigationBar 配置）；需重新构建安装包生效

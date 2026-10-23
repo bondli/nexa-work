@@ -50,6 +50,15 @@ export interface ChatMessageAttachment {
   dataUrl?: string | null
 }
 
+/** token 用量（桌面端 token_usage 反序列化后下发 / assistant.done 事件） */
+export interface TokenUsage {
+  input?: number
+  output?: number
+  totalTokens?: number
+  cacheRead?: number
+  cacheWrite?: number
+}
+
 /** 消息条目（session:messages 回包） */
 export interface ChatMessage {
   id: string
@@ -64,6 +73,10 @@ export interface ChatMessage {
   done?: boolean
   /** 所属任务轨迹（agent_runs.id）；历史数据为 null */
   runId?: string | null
+  /** assistant 使用的模型标识 provider/modelId */
+  model?: string | null
+  /** assistant token 用量（消息底栏展示） */
+  usage?: TokenUsage | null
   /** 用户消息携带的图片附件 */
   attachments?: ChatMessageAttachment[]
 }

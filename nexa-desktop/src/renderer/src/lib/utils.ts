@@ -20,6 +20,17 @@ export function timeAgo(input: number): string {
 }
 
 /**
+ * token 数量格式化：千以内原样，千位用 k、百万位用 M
+ * 例：946 → 946；5_500 → 5.5k；12_345 → 12.3k；1_250_000 → 1.3M
+ */
+export function formatTokens(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "0"
+  if (n < 1000) return String(Math.round(n))
+  if (n < 1_000_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`
+  return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`
+}
+
+/**
  * 消息时间戳展示（绝对时间，输入毫秒，兼容秒级值）：
  * 今天 → "14:30"；昨天 → "昨天 14:30"；更早 → "2026/10/16 14:30"
  * 「今天/昨天」按本地日历天判定（用日期构造做增减，避免 DST 下减 24h 出错）

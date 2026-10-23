@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native"
 import { Link, router, useFocusEffect } from "expo-router"
-import { ChevronDown, ChevronRight, Monitor } from "lucide-react-native"
+import { CheckCircle2, ChevronDown, ChevronRight, Monitor, Pause, XCircle } from "lucide-react-native"
 import { useTheme } from "@/lib/theme"
 import { useRelayStore } from "@/lib/relay/service"
 import { fmtTsShort } from "@/lib/time"
@@ -119,16 +119,26 @@ export default function TasksScreen() {
         sectionTitle: { color: t.textMuted, fontSize: 12, fontWeight: "600", letterSpacing: 0.5 },
         empty: { padding: 48, alignItems: "center" },
         emptyText: { color: t.textMuted, fontSize: 14, textAlign: "center" },
-        sep: { height: 1, backgroundColor: t.card },
-        item: { paddingHorizontal: 16, paddingVertical: 12 },
-        itemHead: { flexDirection: "row", alignItems: "center", gap: 8 },
+        // 任务卡片：白色圆角卡片，左状态图标 + 右侧「任务名 / 时间」两行
+        card: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          marginHorizontal: 12,
+          marginBottom: 8,
+          paddingHorizontal: 14,
+          paddingVertical: 12,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: t.border,
+          backgroundColor: t.card,
+        },
+        statusWrap: { width: 20, alignItems: "center", justifyContent: "center" },
+        cardBody: { flex: 1, minWidth: 0 },
         modeBadge: { fontSize: 10, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5, overflow: "hidden" },
         badgeCode: { color: t.badgeCode, backgroundColor: t.badgeCodeSoft },
-        badgeFree: { color: t.accent, backgroundColor: t.accentSoft },
-        itemTitle: { color: t.text, fontSize: 15, fontWeight: "500", flex: 1 },
-        itemMeta: { flexDirection: "row", alignItems: "center", marginTop: 4, gap: 6, paddingLeft: 2 },
-        itemStatus: { color: t.textMuted, fontSize: 11 },
-        itemTime: { color: t.textMuted, fontSize: 11 },
+        itemTitle: { color: t.text, fontSize: 15, fontWeight: "500", flexShrink: 1 },
+        itemTime: { color: t.textMuted, fontSize: 12, marginTop: 4 },
       }),
     [t]
   )
@@ -181,19 +191,32 @@ export default function TasksScreen() {
           // 折叠的组不渲染条目；renderItem 由 SectionList 按 data 逐条调用，只渲染单条
           collapsed.has(section.key) ? null : (
             <Link href={`/session/${item.id}`} asChild>
-              <Pressable style={styles.item}>
-                <View style={styles.itemHead}>
-                  {item.mode === "project" ? (
-                    <Text style={[styles.modeBadge, styles.badgeCode]}>编码</Text>
-                  ) : null}
-                  <Text style={styles.itemTitle} numberOfLines={1}>{item.title || "未命名会话"}</Text>
+              <Pressable style={styles.card} android_ripple={{ color: "transparent" }}>
+                {/* 左侧状态图标：进行中显示 loading，失败/暂停/完成各用对应图标 */}
+                <View style={styles.statusWrap}>
+                  {item.status === "running" ? (
+                    <ActivityIndicator size="small" color={t.accent} />
+                  ) : item.status === "failed" ? (
+                    <XCircle size={18} color={t.danger} />
+                  ) : item.status === "paused" ? (
+                    <Pause size={18} color={t.textMuted} />
+                  ) : (
+                    <CheckCircle2 size={18} color={t.success} />
+                  )}
                 </View>
-                <View style={styles.itemMeta}>
-                  {item.status ? <Text style={styles.itemStatus}>{item.status}</Text> : null}
-                  {item.updatedAt ? (
-                    <Text style={styles.itemTime}>{fmtTsShort(item.updatedAt)}</Text>
-                  ) : null}
+                <View style={styles.cardBody}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={styles.itemTitle} numberOfLines={1}>{item.title || "未命名会话"}</Text>
+                    {item.mode === "project" ? (
+                      <Text style={[styles.modeBadge, styles.badgeCode]}>编码</Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.itemTime} numberOfLines={1}>
+                    {item.updatedAt ? fmtTsShort(item.updatedAt) : ""}
+                  </Text>
                 </View>
+                {/* 进入箭头：右侧入栈指示，明确「点进去」的入口 */}
+                <ChevronRight size={18} color={t.textMuted} />
               </Pressable>
             </Link>
           )

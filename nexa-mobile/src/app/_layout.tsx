@@ -67,6 +67,9 @@ function RootLayoutContent() {
             headerTintColor: theme.colors.text,
             headerTitleStyle: { fontWeight: "600", fontSize: 17 },
             contentStyle: { backgroundColor: theme.colors.bg },
+            // 切入动效：Android 上 react-native-screens 的默认动画是「缩小 0.85 → 1 + 淡入」，
+            // 观感是页面闪一下出现；统一改成从右侧推入的标准页面切入
+            animation: "slide_from_right",
             // 自定义返回按钮：去掉 Android 原生头部返回键的水波纹/暗色闪动
             headerBackVisible: false,
             headerLeft: () => (
@@ -85,10 +88,10 @@ function RootLayoutContent() {
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="pair" options={{ title: "配对电脑" }} />
-          <Stack.Screen name="desktop-switch" options={{ title: "切换电脑", presentation: "modal" }} />
+          <Stack.Screen name="desktop-switch" options={{ title: "切换电脑", presentation: "modal", animation: "slide_from_bottom" }} />
           <Stack.Screen name="session/[id]" options={{ title: "任务详情" }} />
-          <Stack.Screen name="new-task" options={{ title: "新建任务", presentation: "modal" }} />
-          <Stack.Screen name="new-note" options={{ title: "新增笔记", presentation: "modal" }} />
+          <Stack.Screen name="new-task" options={{ title: "新建任务", presentation: "modal", animation: "slide_from_bottom" }} />
+          <Stack.Screen name="new-note" options={{ title: "新增笔记", presentation: "modal", animation: "slide_from_bottom" }} />
           <Stack.Screen name="artifact/[sessionId]" options={{ title: "产物预览" }} />
           <Stack.Screen name="job/[jobId]" options={{ title: "执行记录" }} />
           <Stack.Screen name="library/[id]" options={{ title: "资料详情" }} />

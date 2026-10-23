@@ -2,17 +2,20 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { Bot, Terminal, Pause, Play, ChevronDown, ChevronRight, Cpu, Loader2, Sparkles, Copy, Check, RotateCcw, UserRound, FolderOpen, Plus, Wrench, ArrowUp, Archive, CheckCircle2, XCircle, X } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { Card } from "@renderer/components/ui/card"
+import { ConversationContent } from "@renderer/components/ai-elements/conversation"
 import {
-  ConversationContent,
   Message,
+  MessageActions,
   MessageAvatar,
   MessageContent,
+  MessageHeader,
   Response,
   StreamingPreview,
-  Thinking,
-  Tool,
-  PlanCard,
-} from "@renderer/components/ai-elements/conversation"
+} from "@renderer/components/ai-elements/message"
+import { Reasoning } from "@renderer/components/ai-elements/reasoning"
+import { Tool } from "@renderer/components/ai-elements/tool"
+import { Plan } from "@renderer/components/ai-elements/plan"
+import { Task, type TaskStatus } from "@renderer/components/ai-elements/task"
 import { ArtifactCards } from "@renderer/features/chat/artifact-cards"
 import { LogoIcon } from "@renderer/components/logo-icon"
 import {
@@ -25,7 +28,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from "@renderer/components/ui/dropdown-menu"
-import { cn, formatMessageTime } from "@renderer/lib/utils"
+import { cn, formatMessageTime, formatTokens } from "@renderer/lib/utils"
 import { useConversationStore, type ChatMessage, type Conversation, type AgentRunInfo } from "@renderer/stores/conversation-store"
 import { useExpertsStore } from "@renderer/stores/experts-store"
 import { useArtifactsStore } from "@renderer/stores/artifacts-store"
@@ -922,14 +925,14 @@ function buildRunGroups(messages: ChatMessage[]): RunGroupData[] {
   return groups
 }
 
-/** 耗时格式化：59秒 / 2分30秒 / 1小时05分 */
+/** 耗时格式化：42s / 2m30s / 1h05m */
 function formatRunDuration(ms: number): string {
   const total = Math.max(0, Math.round(ms / 1000))
-  if (total < 60) return `${total}秒`
+  if (total < 60) return `${total}s`
   const mins = Math.floor(total / 60)
   const secs = total % 60
-  if (mins < 60) return `${mins}分${secs}秒`
-  return `${Math.floor(mins / 60)}小时${String(mins % 60).padStart(2, "0")}分`
+  if (mins < 60) return `${mins}m${String(secs).padStart(2, "0")}s`
+  return `${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, "0")}m`
 }
 
 function RunGroupView({
@@ -953,7 +956,16 @@ function RunGroupView({
   const toolCount = items.filter((m) => m.role === "tool").length
   const running = realRun?.status === "running"
 
-  // 最终回答：完成后取最后一条有正文的 assistant 常显；运行中全部留在展开区避免时序错位
+  // 历史数据无 agent_runs 记录：用组内消息时间戳合成轨迹元数据（秒级精度）
+  const meta: AgentRunInfo = realRun ?? {
+    id: group.key,
+    status: "completed",
+    startedAt: items[0]?.createdAt ?? Date.now(),
+    durationMs: items.length >= 2 ? items[items.length - 1].createdAt - items[0].createdAt : 0,
+    toolCallCount: toolCount,
+  }
+
+  // 最终回答：完成后取最后一条有正文的 assistant 常显；运行中全部留在轨迹里避免时序错位
   let finalIdx = -1
   if (!running) {
     for (let i = items.length - 1; i >= 0; i--) {
@@ -965,7 +977,10 @@ function RunGroupView({
     }
   }
 
-  // 没有工具调用的普通问答不显示轨迹条
+  const finalMsg = finalIdx >= 0 ? items[finalIdx] : null
+  const traceItems = items.filter((_, i) => i !== finalIdx)
+
+  // 没有工具调用的普通问答：不需要任务轨迹，直接按消息流展示
   if (toolCount === 0) {
     return (
       <>
@@ -975,107 +990,62 @@ function RunGroupView({
     )
   }
 
-  // 历史数据无 agent_runs 记录：用组内消息时间戳合成轨迹元数据（秒级精度）
-  const meta: AgentRunInfo = realRun ?? {
-    id: group.key,
-    status: "completed",
-    startedAt: items[0]?.createdAt ?? Date.now(),
-    durationMs: items.length >= 2 ? items[items.length - 1].createdAt - items[0].createdAt : 0,
-    toolCallCount: toolCount,
-  }
-  const finalMsg = finalIdx >= 0 ? items[finalIdx] : null
-  const traceItems = items.filter((_, i) => i !== finalIdx)
-
   return (
     <>
       {group.user && <MessageBubble key={group.user.id} msg={group.user} />}
-      <RunTrace meta={meta} running={running} toolCount={toolCount} finalMsg={finalMsg} artifactAnchorId={artifactAnchorId}>
-        {traceItems.map((m) => <MessageBubble key={m.id} msg={m} artifactAnchorId={artifactAnchorId} />)}
-      </RunTrace>
+      {/* 一轮 agent loop 的执行过程收进最终回答里：头部下方一行「已完成 42s ›」，展开可回看 */}
+      {finalMsg ? (
+        <MessageBubble
+          msg={finalMsg}
+          artifactAnchorId={artifactAnchorId}
+          trace={{
+            status: meta.status as TaskStatus,
+            durationLabel: meta.durationMs != null ? formatRunDuration(meta.durationMs) : null,
+            content: traceItems.map((m) => (
+              <MessageBubble key={m.id} msg={m} artifactAnchorId={artifactAnchorId} embedded />
+            )),
+          }}
+        />
+      ) : (
+        // 运行中 / 无最终回答：轨迹条独立展示在用户消息之后
+        <Task
+          status={(running ? "running" : meta.status) as TaskStatus}
+          durationLabel={!running && meta.durationMs != null ? formatRunDuration(meta.durationMs) : null}
+        >
+          {traceItems.map((m) => (
+            <MessageBubble key={m.id} msg={m} artifactAnchorId={artifactAnchorId} embedded />
+          ))}
+        </Task>
+      )}
     </>
   )
 }
 
-function RunTrace({
-  meta,
-  running,
-  toolCount,
-  finalMsg,
+/** 最终回答内嵌的执行轨迹（折叠条 + 步骤内容） */
+interface AssistantTrace {
+  status: TaskStatus
+  durationLabel: string | null
+  content: React.ReactNode
+}
+
+function MessageBubble({
+  msg,
   artifactAnchorId,
-  children,
+  embedded,
+  trace,
 }: {
-  meta: AgentRunInfo
-  running: boolean
-  toolCount: number
-  finalMsg: ChatMessage | null
-  artifactAnchorId: string | null
-  children: React.ReactNode
+  msg: ChatMessage
+  artifactAnchorId?: string | null
+  /** 嵌在 Task 轨迹内部：作为任务步骤展示，不带头像和名称行 */
+  embedded?: boolean
+  /** 挂在该条助手消息头部下方的执行轨迹 */
+  trace?: AssistantTrace
 }) {
-  // 运行中默认展开跟随；收到 run.finished 状态翻转时自动收拢
-  const [open, setOpen] = useState(running)
-  const prevRunning = useRef(running)
-  useEffect(() => {
-    if (prevRunning.current && !running) setOpen(false)
-    prevRunning.current = running
-  }, [running])
-
-  const failed = meta.status === "failed"
-  const paused = meta.status === "paused"
-
-  const statusIcon = running ? (
-    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
-  ) : failed ? (
-    <XCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
-  ) : paused ? (
-    <Pause className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-  ) : (
-    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-  )
-
-  const title = running
-    ? "任务执行中…"
-    : failed
-      ? "任务失败"
-      : paused
-        ? "任务已暂停"
-        : "任务耗时"
-  const duration = !running && meta.durationMs !== undefined ? formatRunDuration(meta.durationMs) : null
-
-  return (
-    <>
-      <Message from="assistant">
-        <MessageAvatar />
-        <div className="flex w-full min-w-0 flex-col gap-2">
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            aria-expanded={open}
-            className="flex w-full items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {open ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
-            {statusIcon}
-            <span className="shrink-0 font-medium text-foreground">{title}</span>
-            {duration && <span className="shrink-0 tabular-nums">{duration}</span>}
-            <span className="ml-auto flex shrink-0 items-center gap-1 pl-2 text-[11px]">
-              <Terminal className="h-3 w-3" />
-              {toolCount} 次工具调用
-            </span>
-          </button>
-          {open && <div className="flex flex-col gap-2">{children}</div>}
-        </div>
-      </Message>
-      {/* 最终回答常显（不随轨迹收拢） */}
-      {finalMsg && <MessageBubble msg={finalMsg} artifactAnchorId={artifactAnchorId} />}
-    </>
-  )
-}
-
-function MessageBubble({ msg, artifactAnchorId }: { msg: ChatMessage; artifactAnchorId?: string | null }) {
   switch (msg.role) {
     case "user":
       return <UserBubble msg={msg} />
     case "assistant":
-      return <AssistantBubble msg={msg} showArtifacts={msg.id === artifactAnchorId} />
+      return <AssistantBubble msg={msg} showArtifacts={msg.id === artifactAnchorId} embedded={embedded} trace={trace} />
     case "tool":
       return <ToolCallBubble msg={msg} />
     case "plan":
@@ -1116,7 +1086,17 @@ function UserBubble({ msg }: { msg: ChatMessage }) {
   )
 }
 
-function AssistantBubble({ msg, showArtifacts }: { msg: ChatMessage; showArtifacts?: boolean }) {
+function AssistantBubble({
+  msg,
+  showArtifacts,
+  embedded,
+  trace,
+}: {
+  msg: ChatMessage
+  showArtifacts?: boolean
+  embedded?: boolean
+  trace?: AssistantTrace
+}) {
   const sessionId = useConversationStore((s) => s.currentSessionId)
   const hasThinking = Boolean(msg.thinking) || msg.thinkingStreaming === true
   const timeStr = formatMessageTime(msg.createdAt)
@@ -1126,13 +1106,36 @@ function AssistantBubble({ msg, showArtifacts }: { msg: ChatMessage; showArtifac
     ? (usage as { totalTokens?: number }).totalTokens ?? (usage.input ?? 0) + (usage.output ?? 0)
     : 0
 
+  // 轨迹内部：只保留「思考 + 正文」，不带头像/名称/操作栏
+  if (embedded) {
+    return (
+      <div className="flex w-full min-w-0 flex-col gap-1.5">
+        {hasThinking && <Reasoning content={msg.thinking ?? ""} streaming={msg.thinkingStreaming} />}
+        {msg.content.trim() && (
+          <div className="text-[length:var(--chat-font-size,14px)] leading-relaxed">
+            {msg.streaming ? <StreamingPreview content={msg.content} /> : <Response content={msg.content} />}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <Message from="assistant">
-      <MessageAvatar />
-      <div className="flex w-full min-w-0 flex-col items-start gap-2">
-        {/* 思考过程折叠条：流式中自动展开，完成后收拢可回看 */}
-        {hasThinking && <Thinking content={msg.thinking ?? ""} streaming={msg.thinkingStreaming} />}
-        {/* 正文（纯思考阶段 content 为空，不渲染空泡） */}
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <MessageHeader>
+          <MessageAvatar className="mt-0 h-5 w-5" />
+          <span className="font-medium text-foreground">Nexa</span>
+        </MessageHeader>
+        {/* 执行轨迹折叠条：紧贴头像+名称行下方，默认灰色小字 */}
+        {trace && (
+          <Task status={trace.status} durationLabel={trace.durationLabel}>
+            {trace.content}
+          </Task>
+        )}
+        {/* 思考过程：流式中自动展开，正文到达后收拢 */}
+        {hasThinking && <Reasoning content={msg.thinking ?? ""} streaming={msg.thinkingStreaming} />}
+        {/* 正文（纯思考阶段 content 为空，不渲染空内容） */}
         {(msg.content || msg.streaming) && (
           <MessageContent from="assistant">
             {/* transition-opacity 平滑 streaming→done 切换时的 reflow */}
@@ -1149,27 +1152,26 @@ function AssistantBubble({ msg, showArtifacts }: { msg: ChatMessage; showArtifac
             {showArtifacts && sessionId && <ArtifactCards sessionId={sessionId} />}
           </MessageContent>
         )}
-        {/* footer: copy | 消耗 | model | time — done 后才显示 */}
+        {/* 操作栏：复制 / 时间 / 模型 / token 消耗，常显（复制按钮仍 hover 显现） */}
         {!msg.streaming && msg.content && (
-          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <MessageActions>
             <CopyButton text={msg.content} />
-            {totalTokens > 0 && (
-              <>
-                <span className="opacity-40">·</span>
-                <span title="本次消耗 tokens">消耗 {totalTokens} tokens</span>
-              </>
-            )}
+            <span className="tabular-nums text-[10px]">{timeStr}</span>
             {msg.model && (
               <>
                 <span className="opacity-40">·</span>
-                <span title="使用的模型">{msg.model}</span>
+                <span className="max-w-[180px] truncate" title={msg.model}>
+                  {formatModelName(msg.model)}
+                </span>
               </>
             )}
-            <span className="opacity-40">·</span>
-            <span className="opacity-0 transition-opacity duration-150 group-hover:opacity-100" title="消息时间">
-              {timeStr}
-            </span>
-          </div>
+            {totalTokens > 0 && (
+              <>
+                <span className="opacity-40">·</span>
+                <span title={`本次消耗 ${totalTokens} tokens`}>{formatTokens(totalTokens)} tokens</span>
+              </>
+            )}
+          </MessageActions>
         )}
       </div>
     </Message>
@@ -1253,28 +1255,24 @@ function CopyButton({ text, className }: { text: string; className?: string }) {
 function ToolCallBubble({ msg }: { msg: ChatMessage }) {
   const tool = msg.toolCall
   if (!tool) return null
+  // 工具卡本身已是完整一步：不再套头像行，避免在 Task 轨迹里出现两套层级
   return (
-    // 与正文消息同构：头像位 + 铺满剩余宽度，保证工具卡与正文气泡宽度一致
-    <Message from="assistant">
-      <MessageAvatar />
-      <Tool
-        toolName={tool.toolName}
-        args={tool.args}
-        result={tool.result}
-        success={tool.success}
-        running={tool.success === undefined}
-        durationMs={tool.durationMs}
-      />
-    </Message>
+    <Tool
+      toolName={tool.toolName}
+      args={tool.args}
+      result={tool.result}
+      success={tool.success}
+      running={tool.success === undefined}
+      durationMs={tool.durationMs}
+    />
   )
 }
 
 function ErrorBubble({ msg }: { msg: ChatMessage }) {
   return (
-    <div className="flex justify-center">
-      <div className="max-w-[80%] rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-2 text-xs text-red-500">
-        {msg.content}
-      </div>
+    <div className="flex w-full items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+      <XCircle className="mt-px h-3.5 w-3.5 shrink-0" />
+      <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{msg.content}</span>
     </div>
   )
 }
@@ -1282,13 +1280,5 @@ function ErrorBubble({ msg }: { msg: ChatMessage }) {
 function PlanStepBubble({ msg }: { msg: ChatMessage }) {
   const steps = msg.plan?.steps ?? []
   if (steps.length === 0) return null
-
-  return (
-    <Message from="assistant">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <Sparkles className="h-3.5 w-3.5" />
-      </div>
-      <PlanCard steps={steps} />
-    </Message>
-  )
+  return <Plan steps={steps} />
 }
