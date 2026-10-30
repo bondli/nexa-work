@@ -32,7 +32,8 @@ export default function LibraryScreen() {
   const loadingLibrary = useRelayStore((s) => s.loadingLibrary)
   const libraryError = useRelayStore((s) => s.libraryError)
   const loadLibrary = useRelayStore((s) => s.loadLibrary)
-  const [seg, setSeg] = useState<Seg>("files")
+  // 默认进入「笔记」tab（与桌面端一致）
+  const [seg, setSeg] = useState<Seg>("notes")
   const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
@@ -116,9 +117,9 @@ export default function LibraryScreen() {
 
   return (
     <View style={styles.container}>
-      {/* 分段切换：文件 / 笔记 */}
+      {/* 分段切换：笔记 / 文件 */}
       <View style={styles.segRow}>
-        {(["files", "notes"] as Seg[]).map((s) => (
+        {(["notes", "files"] as Seg[]).map((s) => (
           <Pressable key={s} style={[styles.segBtn, seg === s && styles.segBtnActive]} onPress={() => setSeg(s)}>
             <Text style={[styles.segText, seg === s && styles.segTextActive]}>{s === "files" ? "文件" : "笔记"}</Text>
           </Pressable>

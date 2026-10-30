@@ -12,12 +12,13 @@ import { NoteEditor } from "./note-editor"
 type LibraryTab = "files" | "notes"
 
 const LIB_TABS: { id: LibraryTab; label: string; icon: typeof FileText }[] = [
-  { id: "files", label: "文件", icon: FileText },
   { id: "notes", label: "笔记", icon: StickyNote },
+  { id: "files", label: "文件", icon: FileText },
 ]
 
 export function LibraryPage() {
-  const [tab, setTab] = useState<LibraryTab>("files")
+  // 默认进入「笔记」tab（与手机端一致）
+  const [tab, setTab] = useState<LibraryTab>("notes")
   const [search, setSearch] = useState("")
   /** 编辑中的笔记 ID；null = 列表视图 */
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
