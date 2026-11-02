@@ -268,15 +268,18 @@ function handleDesktopConnect(conn: Connection): void {
 }
 
 function handlePhoneConnect(conn: Connection, pairing: ConfirmedPairing): void {
+  const desktop = getConnection("desktop", pairing.desktopId)
   send(conn.ws, "relay:hello", {
     role: "phone",
     deviceId: conn.deviceId,
     name: conn.name,
     token: pairing.token,
     peer: { deviceId: pairing.desktopId, name: pairing.desktopName, role: "desktop" },
+    // peer 只是配对信息，不代表桌面在线。这里额外下发真实在线状态，
+    // 手机端连上瞬间即可显示正确状态（无需等 peer-online / peer-offline 事件）
+    peerOnline: desktop != null,
   })
   // 通知桌面（无论是否在线——在线才收得到）
-  const desktop = getConnection("desktop", pairing.desktopId)
   if (desktop) {
     send(desktop.ws, "relay:paired", {
       deviceId: conn.deviceId,
