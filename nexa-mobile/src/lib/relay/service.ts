@@ -124,7 +124,12 @@ export async function initRelayService(): Promise<void> {
   })
   // 回到前台时校准系统通知权限（用户可能在系统设置里关掉了通知）
   AppState.addEventListener("change", (state) => {
-    if (state === "active") void useRelayStore.getState().refreshNotifyPermission()
+    if (state === "active") {
+      void useRelayStore.getState().refreshNotifyPermission()
+      // 后台期间 WebSocket 可能被系统静默断开且不触发 onclose，
+      // 回前台必须重新校准连接/桌面在线状态，否则桌面已退出仍显示「在线」
+      void c.resync()
+    }
   })
   void storage.getNoticeSound().then((v) => useRelayStore.setState({ noticeSound: v }))
   useRelayStore.setState({ pairings, currentDesktopId: cur?.desktopId ?? null })

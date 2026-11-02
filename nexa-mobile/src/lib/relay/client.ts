@@ -108,6 +108,46 @@ export class RelayClient {
     this.emitStatus()
   }
 
+  /**
+   * 校准连接状态（App 回到前台时调用）。
+   * Android 后台会冻结 JS 线程并静默断开 WebSocket，onclose 常常不触发，
+   * 本地 connected / peerOnline 就会一直停在旧值（桌面已退出仍显示「在线」）。
+   * - socket 非 OPEN：先归零状态再立即重连（hello 会重置 peerOnline，桌面在线时中继补发 peer-online）
+   * - socket 仍 OPEN：发一次轻量 RPC 探测真实链路，桌面离线/超时则标记离线（假活连接直接重连）
+   */
+  async resync(): Promise<void> {
+    if (!this.shouldRun) return
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      this.clearReconnect()
+      this.reconnectAttempts = 0
+      this.status.connected = false
+      this.status.peerOnline = false
+      this.emitStatus()
+      await this.connect()
+      return
+    }
+    try {
+      // 桌面端毫秒级返回；5s 足够判定，不必等默认 12s
+      await this.call("session:list", undefined, 5_000)
+      // 探测成功说明链路真实可用，顺带纠正可能停在旧值的 connected
+      if (!this.status.connected) {
+        this.status.connected = true
+        this.emitStatus()
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : ""
+      this.status.peerOnline = false
+      this.emitStatus()
+      // 中继明确回「离线」说明 socket 正常、只是对端不在；超时/未连接说明连接本身是假活，需重建
+      if (!msg.includes("离线")) {
+        this.clearReconnect()
+        this.reconnectAttempts = 0
+        this.teardownSocket()
+        await this.connect()
+      }
+    }
+  }
+
   // ===== 连接 =====
   private buildUrl(): string {
     const u = new URL(this.opts.relayUrl)
@@ -241,13 +281,13 @@ export class RelayClient {
     }
     switch (msg.type) {
       case RELAY_HELLO: {
-        const payload = (msg.payload ?? {}) as { token?: string; peer?: PairedPeer }
+        const payload = (msg.payload ?? {}) as { token?: string; peer?: PairedPeer; peerOnline?: boolean }
         // 先同步置位 peer 并广播，再异步持久化 token——
         // 若先 await 落盘，期间被中继踢连（onclose 清 peerOnline）会把配对成功状态抹掉
         this.status.peer = payload.peer ?? null
-        // 注意：hello 里的 peer 只是配对信息，不代表在线！在线状态由 relay:peer-online 事件标记，
-        // 否则桌面真离线时手机端会误显示「在线」，发任务被中继拒绝后用户还以为是通的
-        this.status.peerOnline = false
+        // peer 只是配对信息，不代表在线！在线状态取中继下发的真实值（peerOnline）；
+        // 旧版中继没有该字段时按离线处理，后续由 relay:peer-online 事件纠正
+        this.status.peerOnline = Boolean(payload.peerOnline)
         this.emitStatus()
         if (payload.token) {
           this.opts.token = payload.token
