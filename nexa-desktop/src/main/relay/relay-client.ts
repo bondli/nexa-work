@@ -8,12 +8,19 @@
  *
  * 不直接依赖 agentRuntime / db —— 由 main/index.ts 注入 services，避免循环依赖
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, appendFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { homedir } from "node:os"
 import WebSocket from "ws"
 import type { AgentEvent, AttachmentInput, PairedDevice, PendingPairing, RelayStatus } from "@shared/ipc-channels"
 import { getDeviceIdentity } from "./device"
+
+/** 连接日志落盘：后台运行/窗口关闭时 console 不可见，中继问题排查依赖此文件 */
+function rlog(msg: string): void {
+  try {
+    appendFileSync(join(homedir(), ".nexa", "main.log"), `[${new Date().toISOString()}] [relay] ${msg}\n`)
+  } catch { /* noop */ }
+}
 
 /** 手机端 / 浏览器插件可调用的本地能力（由 main/index.ts 实现） */
 export interface RelayServices {
@@ -228,11 +235,13 @@ export class RelayClient {
 
     const ws = new WebSocket(url, { handshakeTimeout: 10_000 })
     this.ws = ws
+    rlog(`connect → ${url.replace(/token=[^&]+/, "token=***")}`)
 
     ws.on("open", () => {
       this.connected = true
       this.reconnectAttempts = 0
       this.lastError = null
+      rlog("connected")
       this.startHeartbeat()
       this.emit()
     })
@@ -255,17 +264,19 @@ export class RelayClient {
       }
     })
 
-    ws.on("close", () => {
+    ws.on("close", (code, reason) => {
       this.connected = false
       this.stopHeartbeat()
+      rlog(`closed code=${code} reason=${reason?.toString() || "(空)"}`)
       // 所有手机随断线标记离线（hello 重连后会纠正）
       for (const d of this.paired.values()) d.online = false
       this.emit()
       if (this.shouldRun && this.relayUrl) this.scheduleReconnect()
     })
 
-    ws.on("error", () => {
+    ws.on("error", (err) => {
       // close 事件会紧随其后，重连逻辑统一在 close 处理
+      rlog(`error: ${err.message}`)
       this.lastError = "中继连接失败"
     })
   }
@@ -391,6 +402,7 @@ export class RelayClient {
 
   private async dispatchFromPhone(msg: RelayEnvelope): Promise<void> {
     const senderId = msg.sender?.deviceId
+    rlog(`rpc ← ${msg.type} (from ${senderId ?? "?"})`)
     const reply = (payload: unknown) => this.reply(msg, payload)
     const replyError = (message: string) => this.replyError(msg, message)
     /** 手机端图片附件归一化：仅保留带 dataUrl 的项，最多 3 张（中继 4MB 上限） */

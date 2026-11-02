@@ -185,6 +185,12 @@ function createWindow(): void {
     mainWindow?.show()
   })
 
+  // 窗口关闭后必须把引用置空：macOS 关窗不退出进程，
+  // 否则后续访问 mainWindow.webContents（已销毁）会抛 "Object has been destroyed"
+  mainWindow.on("closed", () => {
+    mainWindow = null
+  })
+
   // 允许 target=_blank 在系统默认浏览器打开
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
@@ -246,12 +252,11 @@ export function sendAgentEvent(event: AgentEvent): void {
       )
     }
   }
-  if (!mainWindow) {
-    flog(`sendAgentEvent FAIL: mainWindow is null`)
-    return
-  }
-  if (mainWindow.webContents.isDestroyed()) {
-    flog(`sendAgentEvent FAIL: webContents destroyed`)
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    // 窗口已关闭/销毁：webContents 必然不可用（窗口销毁后访问 .webContents 会直接抛错），
+    // 事件仍需转发给手机端，不能整体 return
+    flog(`sendAgentEvent: ${event.type} (session: ${event.sessionId ?? "n/a"}, 窗口不可用仅转发手机)`)
+    relayClient?.forwardAgentEvent(event)
     return
   }
   flog(`sendAgentEvent: ${event.type} (session: ${event.sessionId ?? "n/a"})`)
@@ -278,6 +283,8 @@ function ensureWorkspaceDir(mode: "free" | "project", id: string, projectPath?: 
 async function createSessionInternal(params: SessionCreateParams): Promise<{ sessionId: string; title: string; mode: string }> {
   const db = getDatabase()
   flog(`createSessionInternal: ${params.initialMessage?.slice(0, 30)}`)
+  // 手机端发起任务时窗口可能已被关闭（macOS 关窗不退进程）：自动重开，让执行过程可见
+  if (!mainWindow || mainWindow.isDestroyed()) createWindow()
   const id = randomUUID()
   const wsPath = ensureWorkspaceDir(params.mode, id, params.projectPath)
   const expert = params.expertId ? expertRegistry!.get(params.expertId) : expertRegistry!.getDefault()

@@ -58,6 +58,10 @@
 - 手机端：中继 RPC 默认超时由 30s 降至 12s，桌面端无响应时错误反馈更及时
 
 ### Fixed
+- 桌面端：手机端发起任务后一直 loading 无反馈——macOS 关窗不退出进程，窗口销毁后 `mainWindow` 引用仍保留，`sendAgentEvent` 守卫先访问 `mainWindow.webContents`（已销毁的 getter 直接抛 "Object has been destroyed"），守卫形同虚设，agent loop 第一个事件就崩溃、任务只落库从未执行；现窗口 `closed` 后置空引用、守卫改为先判 `!mainWindow || isDestroyed()`，窗口不可用时事件仍正常转发手机端，且 `createSessionInternal` 检测到窗口已关会自动重开窗口让执行过程可见
+- 手机端：桌面端真离线时仍误显示「在线」——中继 `relay:hello` 里的 `peer` 只是配对信息被误当在线状态，现 hello 一律先置 `peerOnline=false`，在线状态仅由 `relay:peer-online` 事件标记
+- 手机端：中继返回的 RPC 错误（如「桌面端离线」）被消息分发拦截吞掉，调用方只能干等 12s 超时且看不到真实错误——带 id 的 `relay:error` 现在在入口直接 reject 对应 RPC 调用
+- 手机端：fast refresh 后中继连接陷入「duplicate connection」互踢死循环——客户端实例引用从模块级变量改为挂 `globalThis`（模块重载后变量被重置、旧实例 ws 仍活着重连，与同 deviceId 新实例互踢），重载后仍能关停旧实例；`loadSessions` / `loadMessages` 补 catch，RPC 失败不再抛 unhandled rejection 红条
 - 桌面端 + 手机端：助手消息的模型名在重新进入会话后消失——`messages` 表没有 model 列，模型标识只在流式 `assistant.done` 事件里下发、从未落库；现新增 `messages.model` 列（旧库自动 ALTER 补列）并在 `insertAssistant` 时写入 `provider/modelId`，历史加载与中继 `session:messages` 一并回传，重新进入会话仍可展示模型名（本次改动前的历史消息仍为 null）
 - 桌面端：历史消息的 token 用量不显示——`messages.listBySession` 只对 attachments 做了 JSON 反序列化，`token_usage` 仍以 TEXT 原样返回，渲染端按对象读取 `totalTokens` 得到 `undefined`、按 input+output 兜底得到 0，于是整行被隐藏；现统一在 DAO 层解析 token_usage，并把时间/用量移入常显操作栏（复制按钮 hover 才出现）
 - 桌面端：笔记编辑页切到预览态后内容较长时看不到最底部——编辑器根节点原为 `h-full`（父级还有 PageTitleBar，100% 高度导致底部溢出被裁掉），改为 `flex-1 min-h-0`；滚动区同步补 `min-h-0`，让溢出内容进入滚动而不是被裁切

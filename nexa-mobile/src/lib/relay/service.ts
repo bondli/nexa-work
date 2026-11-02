@@ -47,7 +47,25 @@ export interface RunMeta {
   toolCallCount: number
 }
 
-let client: RelayClient | null = null
+// fast refresh 会重载本模块并把模块级变量重置为 null，但旧实例的 ws 连接仍活着，
+// 其自动重连会与同 deviceId 的新实例互踢（中继回 4000 duplicate connection），陷入死循环。
+// 客户端引用挂到 globalThis：模块重载后仍能拿到旧实例并 shutdown。
+const g = globalThis as unknown as { __nexaRelayClient?: RelayClient | null }
+
+function getClient(): RelayClient | null {
+  return g.__nexaRelayClient ?? null
+}
+
+function setClient(c: RelayClient | null): void {
+  g.__nexaRelayClient = c
+}
+
+/** 关停旧实例并替换为新实例（配对/切换电脑/解绑前的统一动作） */
+function replaceClient(next: RelayClient | null): void {
+  const prev = getClient()
+  if (prev) prev.shutdown()
+  setClient(next)
+}
 
 /**
  * 资料条目短期缓存：图片条目从桌面端下发的是完整 base64，重复查看会反复走中继。
@@ -82,7 +100,7 @@ function wireClient(c: RelayClient): void {
 }
 
 export async function initRelayService(): Promise<void> {
-  if (client) return
+  if (getClient()) return
   const identity = await getDeviceIdentity()
   // 多电脑配对：优先取当前选中的电脑的 token/地址；否则回退旧的单 token（兼容升级前的用户）
   const pairings = await storage.getPairings()
@@ -90,13 +108,14 @@ export async function initRelayService(): Promise<void> {
   const cur = pairings.find((p) => p.desktopId === currentId) ?? null
   const relayUrl = cur?.relayUrl ?? (await storage.getRelayUrl()) ?? ""
   const token = cur?.token ?? (await storage.getToken()) ?? undefined
-  client = new RelayClient({
+  const c = new RelayClient({
     relayUrl,
     deviceId: identity.deviceId,
     name: identity.name,
     token,
   })
-  wireClient(client)
+  setClient(c)
+  wireClient(c)
   // 恢复通知开关与提示音设置；开关已开则顺带确保系统通知权限（首次会弹系统授权框）
   void storage.getNotifyEnabled().then((v) => {
     useRelayStore.setState({ notifyEnabled: v })
@@ -111,7 +130,7 @@ export async function initRelayService(): Promise<void> {
   useRelayStore.setState({ pairings, currentDesktopId: cur?.desktopId ?? null })
   // 兼容升级：老配对用户只有单 token、pairings 为空 → 首次握手成功后自动补一条配对记录
   if (!cur && token && relayUrl) {
-    const unsubOnce = client.onStatus((s) => {
+    const unsubOnce = c.onStatus((s) => {
       if (s.peerOnline && s.peer) {
         unsubOnce()
         void useRelayStore.getState().commitPairing()
@@ -120,39 +139,35 @@ export async function initRelayService(): Promise<void> {
   }
   // 只有已配对（有 token）才自动重连；无 token 启动会一直空连被中继拒，
   // 且与配对流程的连接同 deviceId 冲突（互踢），导致配对永远不成功
-  if (relayUrl && token) void client.start()
+  if (relayUrl && token) void c.start()
 }
 
 export function getRelayClient(): RelayClient | null {
-  return client
+  return getClient()
 }
 
 /** 由配对页在首次配对成功后调用，注入 token 并启动 */
 export async function startRelayWithPairing(relayUrl: string, code: string): Promise<void> {
-  // 关停旧客户端（含热更新/重启后遗留的实例）——同 deviceId 双连接会被中继互踢，
+  // 关停旧客户端（含热更新遗留的实例，靠 globalThis 引用拿到）——同 deviceId 双连接会被中继互踢，
   // 配对连接建立几毫秒内就被顶掉，导致"云端已配对、手机一直转圈"
-  if (client) {
-    client.shutdown()
-    client = null
-  }
+  replaceClient(null)
   const identity = await getDeviceIdentity()
   await storage.setRelayUrl(relayUrl)
-  client = new RelayClient({
+  const c = new RelayClient({
     relayUrl,
     deviceId: identity.deviceId,
     name: identity.name,
     code,
   })
-  wireClient(client)
-  await client.start()
+  setClient(c)
+  wireClient(c)
+  await c.start()
   // start() 只是创建 WebSocket 即返回；真正配对成功以 relay 下发 paired/hello（peerOnline=true）为准。
   // 这里等待结果，15s 超时判定失败并关停客户端，避免配对页永远转圈。
   await new Promise<void>((resolve, reject) => {
-    const c = client!
     const timer = setTimeout(() => {
       unsub()
-      c.shutdown()
-      client = null
+      replaceClient(null)
       const hint = useRelayStore.getState().status.lastError
       const tip = hint ? `；${hint}` : "；检查地址/网络/配对码（模拟器内请用 10.0.2.2 代替 127.0.0.1）"
       reject(new Error(`配对超时${tip}`))
@@ -170,22 +185,22 @@ export async function startRelayWithPairing(relayUrl: string, code: string): Pro
 }
 
 export async function reconfigureRelay(relayUrl: string): Promise<void> {
-  if (!client) {
+  const c = getClient()
+  if (!c) {
     const identity = await getDeviceIdentity()
-    client = new RelayClient({ relayUrl, deviceId: identity.deviceId, name: identity.name })
-    client.onStatus((s) => useRelayStore.getState().setStatus(s))
-    client.onAgentEvent((e) => useRelayStore.getState().handleAgentEvent(e))
-    await client.start()
+    const nc = new RelayClient({ relayUrl, deviceId: identity.deviceId, name: identity.name })
+    setClient(nc)
+    wireClient(nc)
+    await nc.start()
   } else {
     await storage.setRelayUrl(relayUrl)
-    await client.reconfigure({ relayUrl })
+    await c.reconfigure({ relayUrl })
   }
 }
 
 /** 解绑当前电脑并清空连接（跳配对页前调用） */
 export async function unbindAndReset(): Promise<void> {
-  if (client) client.shutdown()
-  client = null
+  replaceClient(null)
   await storage.clearToken()
   useRelayStore.setState({
     status: { connected: false, peerOnline: false, peer: null, lastError: null },
@@ -289,6 +304,9 @@ export const useRelayStore = create<RelayStoreState>((set, get) => ({
     try {
       const list = await c.call<SessionSummary[]>(SESSION_LIST)
       set({ sessions: list ?? [] })
+    } catch (e) {
+      // RPC 失败（如桌面端离线）：保留旧列表，仅记录错误，避免 unhandled rejection 红条
+      console.log("[relay] loadSessions failed:", e instanceof Error ? e.message : e)
     } finally {
       set({ loadingSessions: false })
     }
@@ -317,6 +335,9 @@ export const useRelayStore = create<RelayStoreState>((set, get) => ({
         messages: { ...s.messages, [sessionId]: list ?? [] },
         historicRuns: { ...s.historicRuns, [sessionId]: runMap },
       }))
+    } catch (e) {
+      // 桌面端离线等失败：保持现有消息，仅记日志（详情页流式事件仍可到达）
+      console.log("[relay] loadMessages failed:", e instanceof Error ? e.message : e)
     } finally {
       set((s) => {
         const next = { ...s.loadingMessages }
@@ -539,18 +560,16 @@ export const useRelayStore = create<RelayStoreState>((set, get) => ({
     const target = pairings.find((p) => p.desktopId === desktopId)
     if (!target) throw new Error("配对记录不存在")
     // 断开旧连接，用目标电脑的 token 重连
-    if (client) {
-      client.shutdown()
-      client = null
-    }
+    replaceClient(null)
     const identity = await getDeviceIdentity()
-    client = new RelayClient({
+    const c = new RelayClient({
       relayUrl: target.relayUrl,
       deviceId: identity.deviceId,
       name: identity.name,
       token: target.token,
     })
-    wireClient(client)
+    setClient(c)
+    wireClient(c)
     await storage.setCurrentDesktopId(desktopId)
     await storage.setRelayUrl(target.relayUrl)
     await storage.setToken(target.token)
@@ -565,7 +584,7 @@ export const useRelayStore = create<RelayStoreState>((set, get) => ({
       notes: [],
       jobRuns: {},
     }))
-    void client.start()
+    void c.start()
   },
 
   unbindDesktop: async (desktopId) => {
@@ -574,10 +593,7 @@ export const useRelayStore = create<RelayStoreState>((set, get) => ({
     const currentId = await storage.getCurrentDesktopId()
     if (currentId === desktopId) {
       // 解绑的是当前电脑：断开并清空，需要重新配对
-      if (client) {
-        client.shutdown()
-        client = null
-      }
+      replaceClient(null)
       await storage.clearToken()
       set({
         pairings,

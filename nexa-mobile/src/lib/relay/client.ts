@@ -228,13 +228,26 @@ export class RelayClient {
 
   // ===== 消息处理 =====
   private async handleMessage(msg: RelayEnvelope): Promise<void> {
+    // 带 id 的 relay:error 是 RPC 错误回包（如「桌面端离线」），必须 reject 对应调用，
+    // 否则调用方只能干等 12s 超时，且真实错误被吞掉
+    if (msg.type === "relay:error" && msg.id) {
+      const entry = this.rpcMap.get(msg.id)
+      if (entry) {
+        this.rpcMap.delete(msg.id)
+        clearTimeout(entry.timer)
+        entry.reject(new Error((msg.payload as { message?: string } | undefined)?.message ?? "中继错误"))
+      }
+      return
+    }
     switch (msg.type) {
       case RELAY_HELLO: {
         const payload = (msg.payload ?? {}) as { token?: string; peer?: PairedPeer }
-        // 先同步置位 peer/peerOnline 并广播，再异步持久化 token——
+        // 先同步置位 peer 并广播，再异步持久化 token——
         // 若先 await 落盘，期间被中继踢连（onclose 清 peerOnline）会把配对成功状态抹掉
         this.status.peer = payload.peer ?? null
-        this.status.peerOnline = !!payload.peer
+        // 注意：hello 里的 peer 只是配对信息，不代表在线！在线状态由 relay:peer-online 事件标记，
+        // 否则桌面真离线时手机端会误显示「在线」，发任务被中继拒绝后用户还以为是通的
+        this.status.peerOnline = false
         this.emitStatus()
         if (payload.token) {
           this.opts.token = payload.token
@@ -292,17 +305,13 @@ export class RelayClient {
         break
     }
 
-    // RPC 回包：按 id 匹配
+    // RPC 回包：按 id 匹配（relay:error 已在 handleMessage 入口拦截）
     if (msg.id) {
       const entry = this.rpcMap.get(msg.id)
       if (entry) {
         this.rpcMap.delete(msg.id)
         clearTimeout(entry.timer)
-        if (msg.type === "relay:error") {
-          entry.reject(new Error((msg.payload as { message?: string })?.message ?? "中继错误"))
-        } else {
-          entry.resolve(msg.payload)
-        }
+        entry.resolve(msg.payload)
       }
     }
   }
