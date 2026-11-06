@@ -1,4 +1,4 @@
-import { ChevronRight, ChevronDown, Plus, Folder, Loader2, CirclePause, CheckCircle2, XCircle, Trash2, MoreHorizontal, Pencil, Archive, ArchiveRestore, FolderOpen, Zap } from "lucide-react"
+import { ChevronRight, ChevronDown, Plus, Folder, MessageSquare, Trash2, MoreHorizontal, Pencil, Archive, ArchiveRestore, FolderOpen, Zap } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@renderer/components/ui/button"
 import {
@@ -41,8 +41,8 @@ export function TaskListPanel() {
         </Button>
       </div>
 
-      {/* 任务列表（数据驱动） */}
-      <div className="mt-1 flex-1 overflow-y-auto px-2 pb-2">
+      {/* 任务列表（数据驱动）：隐藏滚动条，仍可滚动 */}
+      <div className="mt-1 flex-1 overflow-y-auto px-2 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <TaskList />
       </div>
     </LeftPanel>
@@ -130,7 +130,7 @@ function TaskList() {
               else current.add(FREE_GROUP_KEY)
               useSidebarStore.setState({ expandedGroups: current })
             }}
-            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {freeExpanded ? (
               <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -179,7 +179,7 @@ function TaskList() {
               else current.add(ARCHIVED_GROUP_KEY)
               useSidebarStore.setState({ expandedGroups: current })
             }}
-            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {expandedGroups.has(ARCHIVED_GROUP_KEY) ? (
               <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -248,7 +248,7 @@ function GroupHeader({ group, expanded, onToggle }: { group: ProjectGroup; expan
   return (
     <div
       // 命名空间 group/gh 避免与 SessionRow 的 group 冲突
-      className="group/gh flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-sm hover:bg-accent"
+      className="group/gh flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-[13px] hover:bg-accent"
     >
       {/* 左侧主区域（点击展开/收拢） */}
       <button
@@ -303,7 +303,37 @@ function GroupHeader({ group, expanded, onToggle }: { group: ProjectGroup; expan
   )
 }
 
-// ===== 会话行 =====
+// ===== 会话行（展示形式对齐 nova 自由对话：状态点 + 标题 + 时间，第二行 图标 + 标签 + 状态） =====
+/** 状态圆点：运行中主色脉冲、失败红、完成绿、其余弱化 */
+function statusDot(status: SessionItem["status"]): string {
+  if (status === "running") return "bg-primary animate-pulse"
+  if (status === "failed") return "bg-destructive"
+  if (status === "completed") return "bg-emerald-500"
+  return "bg-muted-foreground/40"
+}
+
+/** 行内时间：今天 10:24 / 昨天 10:24 / 03/12（updatedAt 兼容秒与毫秒） */
+function timeLabel(input: number): string {
+  const ts = input < 1e12 ? input * 1000 : input
+  const date = new Date(ts)
+  const now = new Date()
+  const hm = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
+  if (date.toDateString() === now.toDateString()) return `今天 ${hm}`
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  if (date.toDateString() === yesterday.toDateString()) return `昨天 ${hm}`
+  return `${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")}`
+}
+
+/** 第二行标签：编码任务显示项目名，自由任务显示「自由对话」 */
+function metaLabel(item: SessionItem): string {
+  if (item.mode === "project" && item.projectPath) {
+    const trimmed = item.projectPath.replace(/\/+$/, "")
+    return trimmed.split(/[\\/]/).pop() || trimmed
+  }
+  return "自由对话"
+}
+
 function SessionRow({
   item,
   active,
@@ -320,6 +350,8 @@ function SessionRow({
   const archiveSession = useConversationStore((s) => s.archiveSession)
   const revealSession = useConversationStore((s) => s.revealSession)
   const [editing, setEditing] = useState(false)
+  /** 菜单展开状态：控制右上角「…」与时间的切换，避免弹层关闭瞬间显隐跳动 */
+  const [menuOpen, setMenuOpen] = useState(false)
   const [draft, setDraft] = useState(item.title)
   const inputRef = useRef<HTMLInputElement>(null)
   /** 重命名点击标记: 阻止 Radix 菜单关闭时把焦点还原到触发按钮（与行内输入框抢焦点） */
@@ -353,51 +385,89 @@ function SessionRow({
   }
 
   const menuActionClass = "gap-2 [&_svg]:text-muted-foreground"
+  const MetaIcon = item.mode === "project" ? Folder : MessageSquare
+  /** 分组内缩进：在 px-3 基础上再内缩 12px */
+  const indentStyle = indent ? { paddingLeft: "1.5rem" } : undefined
 
   return (
     <div
       className={cn(
-        "group flex w-full items-center rounded-md pr-1 transition-colors",
-        active ? "bg-accent" : "hover:bg-accent/60"
+        "group/item relative rounded-lg transition-colors",
+        active ? "bg-secondary" : "hover:bg-secondary/60"
       )}
-      style={indent ? { paddingLeft: "calc(0.5rem + 0.75rem)" } : undefined}
     >
       {editing ? (
-        <input
-          ref={inputRef}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commitRename()
-            if (e.key === "Escape") setEditing(false)
-          }}
-          onBlur={() => {
-            // 挂载初期 Radix 焦点清理可能引发 blur，完成聚焦前忽略
-            if (!focusedRef.current) return
-            commitRename()
-          }}
-          className="mx-1 h-6 min-w-0 flex-1 rounded border border-input bg-background px-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
+        <div className="px-3 py-2.5" style={indentStyle}>
+          <div className="flex items-center gap-2">
+            <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", statusDot(item.status))} />
+            <input
+              ref={inputRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitRename()
+                if (e.key === "Escape") setEditing(false)
+              }}
+              onBlur={() => {
+                // 挂载初期 Radix 焦点清理可能引发 blur，完成聚焦前忽略
+                if (!focusedRef.current) return
+                commitRename()
+              }}
+              className="min-w-0 flex-1 rounded border border-input bg-background px-1.5 py-0.5 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+        </div>
       ) : (
         <button
+          type="button"
           onClick={onClick}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          style={indentStyle}
+          className="w-full rounded-lg px-3 py-2.5 pr-8 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <StatusBadge status={item.status} />
-          {/* truncate 省略超长标题，hover 经 title 属性展示全文 */}
-          <span className="flex-1 truncate text-sm text-sidebar-foreground" title={item.title}>{item.title}</span>
+          <div className="flex items-center gap-2">
+            <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", statusDot(item.status))} />
+            {/* truncate 省略超长标题，hover 经 title 属性展示全文 */}
+            <span className="flex-1 truncate text-[13px] font-medium text-sidebar-foreground" title={item.title}>
+              {item.title}
+            </span>
+            {/* 时间与「…」占同一位置：用透明度切换（不用 hidden），避免 hover／弹层关闭时闪一下 */}
+            <span
+              className={cn(
+                "shrink-0 text-[10px] text-muted-foreground transition-opacity group-hover/item:opacity-0",
+                menuOpen && "opacity-0"
+              )}
+            >
+              {timeLabel(item.updatedAt)}
+            </span>
+          </div>
+          <div className="mt-1 flex items-center gap-1.5 pl-3.5 text-[11px] text-muted-foreground">
+            <MetaIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <span className="truncate">{metaLabel(item)}</span>
+            {item.status === "running" ? (
+              <span className="ml-auto shrink-0 text-primary">运行中</span>
+            ) : item.status === "failed" ? (
+              <span className="ml-auto shrink-0 text-destructive">失败</span>
+            ) : null}
+          </div>
         </button>
       )}
-      <DropdownMenu>
+
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <button
             aria-label="任务操作"
             title="更多操作"
             onClick={(e) => e.stopPropagation()}
-            className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 data-[state=open]:opacity-100"
+            className={cn(
+              "absolute right-1.5 top-2 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-secondary hover:text-foreground focus-visible:opacity-100",
+              // 常驻挂载、只切透明度：菜单关闭时不会先消失再出现（避免右上角闪动）
+              menuOpen
+                ? "pointer-events-auto opacity-100"
+                : "pointer-events-none group-hover/item:pointer-events-auto group-hover/item:opacity-100"
+            )}
           >
-            <MoreHorizontal className="h-3.5 w-3.5" />
+            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -436,28 +506,6 @@ function SessionRow({
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
-  )
-}
-
-// ===== 状态徽章 =====
-function StatusBadge({ status }: { status: SessionItem["status"] }) {
-  const iconMap = {
-    running: Loader2,
-    paused: CirclePause,
-    completed: CheckCircle2,
-    failed: XCircle,
-  } as const
-  const Icon = iconMap[status]
-  const colorMap = {
-    running: "text-primary",
-    paused: "text-muted-foreground",
-    completed: "text-emerald-500",
-    failed: "text-red-500",
-  } as const
-  return (
-    <Icon
-      className={cn("h-3.5 w-3.5 shrink-0", colorMap[status], status === "running" && "animate-spin")}
-    />
   )
 }
 

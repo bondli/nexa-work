@@ -243,7 +243,7 @@ export function NoteEditor({
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleTagAdd() } }}
                 placeholder="添加标签…"
-                className="w-20 rounded border border-input bg-background px-1.5 py-0.5 text-[11px] outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
+                className="h-7 w-20 rounded border border-input bg-background px-1.5 text-[11px] outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
               />
             </div>
           </div>

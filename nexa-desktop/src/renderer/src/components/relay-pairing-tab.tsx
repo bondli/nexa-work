@@ -299,9 +299,9 @@ export function RelayPairingTab() {
           <div className="flex items-start gap-4">
             <div className="flex flex-col items-center gap-1">
               {qrDataUrl ? (
-                <img src={qrDataUrl} alt="配对二维码" className="h-36 w-36 rounded-lg border border-border bg-white p-1" />
+                <img src={qrDataUrl} alt="配对二维码" className="h-[130px] w-[130px] rounded-lg border border-border bg-white p-1" />
               ) : (
-                <div className="flex h-36 w-36 items-center justify-center rounded-lg border border-border bg-muted">
+                <div className="flex h-[130px] w-[130px] items-center justify-center rounded-lg border border-border bg-muted">
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 </div>
               )}

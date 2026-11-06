@@ -9,8 +9,9 @@ export const LEFT_PANEL_WIDTH = 260
  */
 export function LeftPanel({ children }: { children: ReactNode }) {
   return (
+    // 左侧列表容器对齐 nova（SessionList: border-r + bg-card，与内容页同色，靠右边框分隔）
     <aside
-      className="flex h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar"
+      className="flex h-full shrink-0 flex-col border-r border-border bg-card"
       style={{ width: `${LEFT_PANEL_WIDTH}px` }}
     >
       {children}
@@ -51,7 +52,7 @@ export function PanelIconButton({
  */
 export function PageTitleBar({ title, actions }: { title: string; actions?: ReactNode }) {
   return (
-    <div className="drag-bar flex h-16 shrink-0 items-center gap-3 border-b border-border bg-background px-4">
+    <div className="drag-bar flex h-16 shrink-0 items-center gap-3 border-b border-border bg-card px-4">
       <h1 className="text-sm font-semibold">{title}</h1>
       <div className="flex-1" />
       {actions}

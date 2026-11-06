@@ -19,8 +19,16 @@
 - 手机端：任务详情页对齐桌面端任务轨迹（RunTrace）——按用户消息切分为任务组，思考过程与工具调用收拢进「任务耗时 X分Y秒 · N 次工具调用」摘要条（运行中自动展开、结束后自动收拢，最终回答常显）；耗时/工具数取自桌面端 agent_runs 真实数据（新增中继 session.runs，消息带 runId 关联），无工具调用的普通问答不显示摘要条
 - 手机端：任务页新增「已归档」分组，展示归档任务（中继 session:list 合并未归档 + 归档两批）
 - 手机端：接入系统级推送（expo-notifications）——Android 建立「任务通知」有声/静音两个通知渠道，打开开关时申请 POST_NOTIFICATIONS 权限；后台/锁屏时由系统通知提醒，前台改为应用内弹窗 + 合成提示音；Expo Go 无原生模块时自动降级为应用内提醒（不崩溃）
+- 桌面端：应用图标跟随主题切换——浅色用白底黑图形（`assets/icon-light.png`），深色用黑底白图形（`assets/icon.png`）；逻辑抽为独立服务 `src/main/app-icon.ts`，统一由 `nativeTheme.shouldUseDarkColors` 驱动，主题偏好启动时同步到 `nativeTheme.themeSource`，因此切换设置或系统外观变化都会自动换图标；macOS 换 Dock 图标（`app.dock.setIcon`），Windows / Linux 换窗口任务栏图标（`BrowserWindow.setIcon`）；两张 PNG 的图形留白调整为 macOS 标准 80%（原 85%），并同步重建 `icon.icns` / `icon.ico`，保证应用未启动（启动器图标）与运行中（Dock 图标）视觉大小一致；打包后由 `extraResources` 输出到 `Resources/assets`
 
 ### Changed
+- 桌面端：设置 · 手机配对页的二维码缩小 10%（`144px` → `130px`，加载占位同步），源图仍按 160px 生成保证清晰度
+- 桌面端：任务列表容器隐藏滚动条（`scrollbar-width: none` + `::-webkit-scrollbar` hidden），仍可正常滚动，列表右侧不再出现滚动条占位
+- 桌面端：任务列表字号对齐 nova 类型标尺（标题/分组标题 13px、第二行 11px、右上角时间 10px，原统一 14px 偏大）；左侧主导航选中项改为 nova 同款 `bg-accent text-primary`（品牌色图标），未选中 `text-muted-foreground`
+- 桌面端：任务列表的会话行展示对齐 nova 的「自由对话」样式——由单行改为两行：第一行 状态圆点 + 标题 + 更新时间（hover 时时间让位给「…」），第二行 类型图标 + 「自由对话 / 项目名」+ 运行中（主色）/ 失败（红）文案；行样式改为 `rounded-lg` + `px-3 py-2.5`、选中 `bg-secondary`，操作菜单由行内占位改为绝对定位悬浮（`right-1.5 top-2`），状态图标统一改为 nova 的状态圆点（运行中脉冲、完成绿、失败红）
+- 桌面端：新增品牌主题色（对齐 nova 的科技蓝）——`--primary` 浅色 `#4f46e5` / 深色 `#6366f1`，`--ring` / `--sidebar-primary` / `--sidebar-ring` 同步，浅色 `--accent` 改为 `#eef2ff`（`#4338ca`）、深色 `--accent-foreground` 改为 `#e0e7ff`；导航栏 Logo 改用 `text-primary`
+- 桌面端：暗色模式内容区提亮一档（对齐 nova 的层次）——页面底色由 `--background`（`oklch(0.145)`，接近纯黑的窗口底色）改为 `--card`（`oklch(0.205)`，对应 nova 的 `#18181b`），改动落在 `App.tsx` 各视图 `main`、`ChatShell`、`PageTitleBar`；左侧列表容器（`LeftPanel`，任务列表 / 资料库 / 定时任务共用）同步改为 `border-r border-border bg-card`（nova `SessionList` 同款：与内容页同色、靠右边框分隔），`--sidebar` 暗色统一为 `oklch(0.18)`（对应 nova 的 `#131316`）供产物面板 / 设置侧栏使用
+- 桌面端：左侧导航栏（nav-rail）配色对齐 nova-desktop——浅色用 `bg-muted`（灰底压在白底内容上）、深色用 `bg-background`（最暗压浅一档的面板），此前与右侧页面/面板同用 `--sidebar`（浅色 0.985 vs 1.0、深色与面板完全同色）导致边界几乎看不出；选中/悬停态改 `foreground` 透明度叠加（浅色深灰底、深色浅灰底），避免与新底色同值后失效
 - 资料库页默认进入「笔记」tab，且 tab 顺序调整为「笔记 / 文件」（桌面端 `LibraryPage` 与手机端资料库页同步调整，此前为「文件 / 笔记」）
 - 手机端：非 tab 页面（任务详情/资料详情/产物预览/执行记录/配对等）切入动效由 Android 默认的「缩小 0.85 → 1 + 淡入」（观感是闪一下出现）改为从右侧推入的 `slide_from_right`；新建任务/新增笔记/切换电脑三个 modal 页改为 `slide_from_bottom`
 - 手机端：任务列表卡片右侧新增进入箭头（ChevronRight），明确「点进去」的入口暗示
@@ -30,6 +38,7 @@
 - 桌面端：会话自动标题上限由 20 字放宽到 30 字（提示词约束 + normalizeTitle 截断 + 首条消息/定时任务的兜底标题同步）
 - 手机端：任务列表由分隔线列表改为白色圆角卡片——左侧状态图标（进行中 loading、失败红叉、暂停、完成勾），右侧两行展示任务名与更新时间
 - 桌面端：`npm run pack` 改为一次产出 mac arm64 dmg（`Nexa-0.1.0-arm64.dmg`）+ Windows x64 NSIS 安装包（`Nexa-0.1.0-x64.exe`），均免签名；Windows 目标显式锁定 x64（否则在 Apple Silicon 上会按宿主架构产出 arm64 包）并统一产物命名模板 `${productName}-${version}-${arch}.${ext}`（原为带空格的 `Nexa Setup 0.1.0.exe`），`dist` 仍只出 mac 包
+- 桌面端：打包配置从 `package.json` 的 `build` 字段抽离为独立的 `electron-builder.yml`（对齐 nova-desktop）——appId / productName / files / asarUnpack / extraResources / mac / dmg / win / nsis 统一在 yml 维护，`package.json` 只保留脚本与依赖；mac 显式 `identity: null` 免签名
 - 桌面端：mac 打包目标只保留 arm64，`npm run dist` 不再额外产出 Intel（x64）dmg
 - 手机端：任务详情页发送按钮改为圆形图标按钮（40×40 圆底 + 白色向上箭头，发送中显示加载圈），与桌面端/主流 IM 一致
 - 手机端：任务详情页消息加载完成后默认滚动到最新一条（每会话仅一次，延迟一帧等 Markdown/表格测量完成后再滚，避免停在中间）
@@ -58,6 +67,9 @@
 - 手机端：中继 RPC 默认超时由 30s 降至 12s，桌面端无响应时错误反馈更及时
 
 ### Fixed
+- 桌面端：资料库笔记编辑页「标签」输入框与「分类」选择框高度不一致（输入框由内容撑高约 20px，改为固定 `h-7` = 28px，与 SelectTrigger 对齐）
+- 桌面端：任务行右上角「…」在操作菜单关闭瞬间闪动——触发按钮原先靠 `hidden/flex` 切换（关闭时先消失、焦点还原后又出现），改为常驻挂载、只用透明度过渡，并由 `DropdownMenu` 的 `open` 状态统一控制「时间 ↔ …」的显隐
+- 桌面端：`dark:` 工具类此前跟随**系统**外观而非应用内主题——Tailwind v4 默认用 `prefers-color-scheme`，导致设置里选浅色、系统为深色时 `dark:` 样式仍生效（与 `--background` / `--sidebar` 等变量错位）；`global.css` 新增 `@custom-variant dark (&:is(.dark *))`（对齐 nova），改为跟随 `.dark` 类
 - 手机端：桌面端退出后仍一直显示「在线」——Android 后台会冻结 JS 线程并静默断开 WebSocket，`onclose` 常常不触发，本地 `peerOnline` 停在旧值；现 App 回到前台时主动校准（socket 非 OPEN 则立即重连并归零状态，socket 仍 OPEN 则发一次轻量 RPC 探测，桌面离线/超时即标记离线、假活连接自动重建）。中继 `relay:hello` 新增 `peerOnline` 字段下发桌面真实在线状态，手机端连上瞬间即可显示正确状态（需同步部署中继；旧中继下手机端回退为「先离线、再由 peer-online 事件纠正」）
 - 桌面端：手机端发起任务后一直 loading 无反馈——macOS 关窗不退出进程，窗口销毁后 `mainWindow` 引用仍保留，`sendAgentEvent` 守卫先访问 `mainWindow.webContents`（已销毁的 getter直接抛 "Object has been destroyed"），守卫形同虚设，agent loop 第一个事件就崩溃、任务只落库从未执行；现窗口 `closed` 后置空引用、守卫改为先判 `!mainWindow || isDestroyed()`，窗口不可用时事件仍正常转发手机端，且 `createSessionInternal` 检测到窗口已关会自动重开窗口让执行过程可见
 - 手机端：桌面端真离线时仍误显示「在线」——中继 `relay:hello` 里的 `peer` 只是配对信息被误当在线状态，现在线状态只认中继下发的 `peerOnline` 字段（旧中继无该字段时按离线处理）与 `peer-online` / `peer-offline` 事件

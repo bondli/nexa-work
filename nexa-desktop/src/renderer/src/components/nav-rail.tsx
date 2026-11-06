@@ -20,12 +20,14 @@ export function NavRail() {
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0}>
       <aside
-        className="flex h-full shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar"
+        // 底色对齐 nova：浅色 muted（灰底）压在白底内容上，深色用 background（最暗）压浅一档的面板，
+        // 避免与右侧页面/面板同色导致边界糊在一起
+        className="flex h-full shrink-0 flex-col items-center border-r border-border bg-muted dark:bg-background"
         style={{ width: `${NAV_RAIL_WIDTH}px` }}
       >
         {/* 顶部 Logo（自身为窗口拖动热区，替代 App.tsx 全局覆盖层，避免遮挡各页面顶栏点击） */}
         <div className="drag-bar flex w-full shrink-0 flex-col items-center justify-start" style={{ paddingTop: 48 }}>
-          <LogoIcon className="h-8 w-8 shrink-0 text-sidebar-foreground" />
+          <LogoIcon className="h-8 w-8 shrink-0 text-primary" />
         </div>
 
         {/* 功能导航（图标间距 8px） */}
@@ -66,9 +68,10 @@ function RailButton({
           aria-label={label}
           className={cn(
             "flex h-10 w-10 items-center justify-center rounded-lg outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+            // 选中态对齐 nova：淡品牌底 + 品牌色图标（nova 的 RailItem 即 bg-accent text-primary）
             active
-              ? "bg-sidebar-accent text-sidebar-accent-foreground"
-              : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              ? "bg-accent text-primary"
+              : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
           )}
         >
           <Icon className="h-[22px] w-[22px]" />

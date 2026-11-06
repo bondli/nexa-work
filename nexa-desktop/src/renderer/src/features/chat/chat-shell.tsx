@@ -110,7 +110,7 @@ function WelcomeView() {
   }
 
   return (
-    <main className="flex h-full flex-1 flex-col bg-background">
+    <main className="flex h-full flex-1 flex-col bg-card">
       {/* 顶部窗口拖动热区（64px） */}
       <div className="drag-bar h-16 shrink-0" />
 
@@ -335,7 +335,7 @@ function ConversationView({ conv }: { conv: Conversation }) {
   }
 
   return (
-    <main className="flex h-full flex-1 flex-col bg-background">
+    <main className="flex h-full flex-1 flex-col bg-card">
       {/* 顶栏（自身可拖动窗口，内部控件以 no-drag 豁免） */}
       <div className="drag-bar shrink-0">
         <Topbar

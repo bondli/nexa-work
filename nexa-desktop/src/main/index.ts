@@ -26,6 +26,7 @@ import { MemoryEngine } from "./agent/memory-engine"
 import { SchedulerService, runNodeScript } from "./scheduler/scheduler-service"
 import { computeNextRunSeconds } from "./scheduler/cron"
 import { RelayClient } from "./relay/relay-client"
+import { initAppIcon, registerIconWindow } from "./app-icon"
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url))
 
@@ -179,6 +180,9 @@ function createWindow(): void {
       sandbox: false,
     },
   })
+
+  // 图标服务跟踪主窗口：Windows / Linux 的任务栏图标随主题同步
+  registerIconWindow(mainWindow)
 
   // 窗口准备好再显示，避免白闪
   mainWindow.on("ready-to-show", () => {
@@ -823,6 +827,7 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle(IPC.SET_THEME, (_e, theme: "light" | "dark" | "system") => {
+    // themeSource 变化会触发 nativeTheme.updated，图标服务据此自动换图标
     nativeTheme.themeSource = theme
     return true
   })
@@ -858,7 +863,11 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle(IPC.SET_SETTINGS, (_e, update: Partial<{ defaultModel: string; apiKeys: Record<string, string>; baseUrls: Record<string, string>; enabledProviders: Record<string, boolean>; initialized: boolean; userName: string; theme: "system" | "light" | "dark"; chatFontSize: 12 | 14 | 16; notificationSound: string; scheduledNoticeEnabled: boolean; hiddenProjectPaths: string[] }>) => {
-    return saveSettings(update)
+    const next = saveSettings(update)
+    // 设置弹框切换主题走的是这里（theme-store 只写 settings，不调 SET_THEME）：
+    // 同步 themeSource，图标服务由 nativeTheme.updated 自动响应
+    if (update.theme) nativeTheme.themeSource = update.theme
+    return next
   })
 
   // ===== 通知设置 =====
@@ -1122,9 +1131,13 @@ app.whenReady().then(async () => {
     } catch (err) {
       flog("Failed to register IPC handlers: " + (err instanceof Error ? err.message : String(err)))
     }
+  // 设置里的主题偏好同步到 nativeTheme：应用图标与原生控件都以此为准，
+  // system 模式下 nativeTheme 会跟随系统外观变化
+  nativeTheme.themeSource = loadSettings().theme
   try {
     createWindow()
     flog("Window created")
+    initAppIcon()
   } catch (err) {
     flog("Failed to create window: " + (err instanceof Error ? err.message : String(err)))
   }

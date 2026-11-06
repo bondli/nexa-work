@@ -1,0 +1,63 @@
+appId: com.nexa.desktop
+productName: Nexa
+
+directories:
+  output: release
+  buildResources: assets
+
+files:
+  - out/**/*
+  - package.json
+
+asar: true
+
+# sql.js 通过 __dirname 读取同目录 wasm，必须从 asar 解包后才能被加载
+asarUnpack:
+  - node_modules/sql.js/dist/*.wasm
+
+extraResources:
+  # 主进程直接按路径读 wasm（见 db/database.ts）
+  - from: node_modules/sql.js/dist/sql-wasm.wasm
+    to: sql-wasm.wasm
+  # 运行时主题切换需要两套图标，打包到 Resources/assets 供主进程读取
+  - from: assets
+    to: assets
+    filter:
+      - "icon.png"
+      - "icon-light.png"
+
+mac:
+  icon: assets/icon.icns
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  # 本地打包免签名
+  identity: null
+  hardenedRuntime: false
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+win:
+  icon: assets/icon.ico
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: Nexa
+
+publish: null

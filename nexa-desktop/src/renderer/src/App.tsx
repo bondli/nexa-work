@@ -35,15 +35,15 @@ export default function App() {
     <div className="flex h-screen w-screen overflow-hidden">
       <NavRail />
       {activeView === "skill-packs" ? (
-        <main className="min-w-0 flex-1">
+        <main className="min-w-0 flex-1 bg-card">
           <SkillPacksPage />
         </main>
       ) : activeView === "scheduled" ? (
-        <main className="min-w-0 flex-1">
+        <main className="min-w-0 flex-1 bg-card">
           <ScheduledPage />
         </main>
       ) : activeView === "library" ? (
-        <main className="min-w-0 flex-1">
+        <main className="min-w-0 flex-1 bg-card">
           <LibraryPage />
         </main>
       ) : (
