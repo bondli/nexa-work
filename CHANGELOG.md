@@ -67,6 +67,7 @@
 - 手机端：中继 RPC 默认超时由 30s 降至 12s，桌面端无响应时错误反馈更及时
 
 ### Fixed
+- 桌面端：设置弹框关闭时画面往左上角「抖一下」——`DialogContent` 同时用了 `translate-x/y-[-50%]`（Tailwind v4 编译为 CSS `translate` 属性）与 tw-animate-css 的 `slide-out-*`（动画的是 `transform` 属性），两者按规范叠加，关闭动画终态被多平移一次（实测 1280×813 视口下左边缘 200 → -218、上边缘 87 → -205）；现去掉四条 slide 工具类（对齐 nova，只保留淡出 + 缩放），遮罩同时去掉 `backdrop-blur-sm`（nova 亦为纯色半透明，规避 backdrop-filter 与 opacity 动画叠加的闪烁）
 - 桌面端：资料库笔记编辑页「标签」输入框与「分类」选择框高度不一致（输入框由内容撑高约 20px，改为固定 `h-7` = 28px，与 SelectTrigger 对齐）
 - 桌面端：任务行右上角「…」在操作菜单关闭瞬间闪动——触发按钮原先靠 `hidden/flex` 切换（关闭时先消失、焦点还原后又出现），改为常驻挂载、只用透明度过渡，并由 `DropdownMenu` 的 `open` 状态统一控制「时间 ↔ …」的显隐
 - 桌面端：`dark:` 工具类此前跟随**系统**外观而非应用内主题——Tailwind v4 默认用 `prefers-color-scheme`，导致设置里选浅色、系统为深色时 `dark:` 样式仍生效（与 `--background` / `--sidebar` 等变量错位）；`global.css` 新增 `@custom-variant dark (&:is(.dark *))`（对齐 nova），改为跟随 `.dark` 类
