@@ -392,6 +392,7 @@ export type AgentEvent =
   | { type: "message.assistant.delta"; sessionId: string; id: string; delta: string }
   | { type: "message.assistant.done"; sessionId: string; id: string; content: string; thinking?: string; usage?: { input?: number; output?: number; totalTokens?: number }; model?: string }
   | { type: "plan.created"; sessionId: string; steps: PlanStep[] }
+  | { type: "plan.updated"; sessionId: string; steps: PlanStep[] }
   | {
       type: "plan.step.update"
       sessionId: string

@@ -4,7 +4,7 @@
  * 通用 tab 含主题 / 会话字号；模型 tab 独立承载 provider 配置（修改即保存，600ms 防抖）
  */
 import { useState, useEffect, useRef } from "react"
-import { Cpu, BookOpen, Brain, Trash2, Pencil, Save, Search, Smartphone, Sun, Moon, Monitor, Check, SlidersHorizontal, ArrowUpRight } from "lucide-react"
+import { Cpu, BookOpen, Brain, Trash2, Pencil, Save, Search, Smartphone, Check, SlidersHorizontal, ArrowUpRight } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { Switch } from "@renderer/components/ui/switch"
 import { Input } from "@renderer/components/ui/input"
@@ -25,6 +25,7 @@ import { RelayPairingTab } from "@renderer/components/relay-pairing-tab"
 import { cn } from "@renderer/lib/utils"
 import { playNoticeSound, NOTICE_SOUND_OPTIONS } from "@renderer/lib/notification-sound"
 import type { ChatFontSize } from "@renderer/lib/theme"
+import { useTranscriptPrefs } from "@renderer/features/chat/stores/transcript-prefs"
 
 /** provider 卡片定义（对齐 demo：DeepSeek 默认，OpenAI / Anthropic 对标） */
 const PROVIDERS: { id: string; label: string; keyPlaceholder: string; baseUrlPlaceholder: string; gradient: string }[] = [
@@ -50,10 +51,10 @@ const TABS: { id: Tab; label: string; icon: typeof Cpu }[] = [
   { id: "relay", label: "手机配对", icon: Smartphone },
 ]
 
-const THEME_OPTIONS: { id: "system" | "light" | "dark"; label: string; icon: typeof Sun }[] = [
-  { id: "system", label: "跟随系统", icon: Monitor },
-  { id: "light", label: "亮色", icon: Sun },
-  { id: "dark", label: "暗黑", icon: Moon },
+const THEME_OPTIONS: { id: "system" | "light" | "dark"; label: string }[] = [
+  { id: "system", label: "跟随系统" },
+  { id: "light", label: "亮色" },
+  { id: "dark", label: "暗黑" },
 ]
 
 const FONT_OPTIONS: { px: ChatFontSize; label: string }[] = [
@@ -103,6 +104,11 @@ export function SettingsDialog() {
   const setTheme = useThemeStore((s) => s.setTheme)
   const chatFontSize = useThemeStore((s) => s.chatFontSize)
   const setChatFontSize = useThemeStore((s) => s.setChatFontSize)
+  // 消息展示偏好（纯渲染端，localStorage 持久化）
+  const showThinking = useTranscriptPrefs((s) => s.showThinking)
+  const autoCollapseSettled = useTranscriptPrefs((s) => s.autoCollapseSettled)
+  const autoCollapseThinking = useTranscriptPrefs((s) => s.autoCollapseThinking)
+  const setTranscriptPref = useTranscriptPrefs((s) => s.set)
 
   const [tab, setTab] = useState<Tab>("general")
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({})
@@ -314,57 +320,80 @@ export function SettingsDialog() {
           <div className="min-h-0 flex-1 overflow-y-auto p-6">
           {tab === "general" && (
             <div className="mx-auto max-w-2xl">
-              {/* 外观 / 主题 */}
+              {/* 外观设置 —— 主题 + 会话字号，统一收在一个分组内 */}
               <section className="mb-7">
-                <h3 className="mb-0.5 text-sm font-semibold">外观</h3>
-                <p className="mb-3 text-xs text-muted-foreground">选择应用的配色主题，跟随系统将随 macOS 深浅色模式自动切换。</p>
-                <div className="flex gap-2">
-                  {THEME_OPTIONS.map((o) => {
-                    const Icon = o.icon
-                    const active = theme === o.id
-                    return (
-                      <button
-                        key={o.id}
-                        onClick={() => setTheme(o.id)}
-                        className={cn(
-                          "flex flex-1 flex-col items-center gap-1.5 rounded-lg border p-3 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          active
-                            ? "border-primary bg-primary/5 text-primary ring-1 ring-primary/30"
-                            : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground"
-                        )}
-                      >
-                        <Icon className="h-4 w-4" />
-                        {o.label}
-                      </button>
-                    )
-                  })}
-                </div>
+                <h3 className="mb-0.5 text-sm font-semibold">外观设置</h3>
+                <p className="mb-3 text-xs text-muted-foreground">调整应用的配色主题与会话消息字号，修改后立即生效。</p>
+                <Card className="divide-y divide-border p-0 shadow-none">
+                  <div className="flex items-center justify-between gap-4 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">主题</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">跟随系统将随 macOS 深浅色模式自动切换。</p>
+                    </div>
+                    <Select value={theme} onValueChange={(v) => setTheme(v as (typeof THEME_OPTIONS)[number]["id"])}>
+                      <SelectTrigger className="h-8 w-[130px] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {THEME_OPTIONS.map((o) => (
+                          <SelectItem key={o.id} value={o.id} className="text-xs">
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">字号</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">仅影响会话消息内容的字号。</p>
+                    </div>
+                    <Select
+                      value={String(chatFontSize)}
+                      onValueChange={(v) => setChatFontSize(Number(v) as ChatFontSize)}
+                    >
+                      <SelectTrigger className="h-8 w-[130px] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FONT_OPTIONS.map((o) => (
+                          <SelectItem key={o.px} value={String(o.px)} className="text-xs">
+                            {o.label} · {o.px}px
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </Card>
               </section>
 
-              {/* 会话字号（仅影响会话消息内容） */}
+              {/* 消息展示 —— 折叠/思考偏好，localStorage 持久化，立即生效 */}
               <section className="mb-7">
-                <h3 className="mb-0.5 text-sm font-semibold">字体大小</h3>
-                <p className="mb-3 text-xs text-muted-foreground">调整会话消息内容的字号，立即生效。</p>
-                <div className="flex gap-2">
-                  {FONT_OPTIONS.map((o) => {
-                    const active = chatFontSize === o.px
-                    return (
-                      <button
-                        key={o.px}
-                        onClick={() => setChatFontSize(o.px)}
-                        className={cn(
-                          "flex flex-1 flex-col items-center gap-1.5 rounded-lg border p-3 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          active
-                            ? "border-primary bg-primary/5 text-primary ring-1 ring-primary/30"
-                            : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground"
-                        )}
-                      >
-                        <span className="leading-none font-medium" style={{ fontSize: `${o.px}px` }}>Aa</span>
-                        {o.label} · {o.px}px
-                      </button>
-                    )
-                  })}
-                </div>
+                <h3 className="mb-0.5 text-sm font-semibold">消息展示</h3>
+                <p className="mb-3 text-xs text-muted-foreground">控制会话中思考过程与执行过程的展开方式，修改后立即生效。</p>
+                <Card className="space-y-4 p-4 shadow-none">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">显示思考过程</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">关闭后隐藏模型的内部思考片段，仅展示最终回答。</p>
+                    </div>
+                    <Switch checked={showThinking} onCheckedChange={(v) => setTranscriptPref("showThinking", v)} aria-label="显示思考过程" />
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">已完成过程默认收拢</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">任务执行完成后，过程（工具调用等）自动折叠，点击可展开。</p>
+                    </div>
+                    <Switch checked={autoCollapseSettled} onCheckedChange={(v) => setTranscriptPref("autoCollapseSettled", v)} aria-label="已完成过程默认收拢" />
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">思考片段默认收拢</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">思考过程较长时默认折叠为一行，避免占据过多空间。</p>
+                    </div>
+                    <Switch checked={autoCollapseThinking} onCheckedChange={(v) => setTranscriptPref("autoCollapseThinking", v)} aria-label="思考片段默认收拢" />
+                  </div>
+                </Card>
               </section>
 
               {/* 通知 —— 桌面系统设置入口 / 提示音 / 定时任务开关 */}

@@ -29,6 +29,7 @@ import type { KnowledgeBaseService } from "../knowledge/service"
 import { getApiKey, resolveModel } from "./settings"
 import { normalizeTitle } from "./llm-helper"
 import { createBuiltinTools } from "./tools"
+import { createTodoTool } from "./todo-tool"
 import { createSkillRunTool } from "./skill-tool"
 import { createConnectorCallTool } from "./connector-tool"
 import { createKnowledgeTools } from "./kb-tools"
@@ -376,6 +377,14 @@ export class AgentRuntime {
     }
     // 本轮用户附件的说明（图片已随消息发送 / 或当前模型不支持视觉）
     if (attachmentNote) lines.push("", attachmentNote)
+    // 任务规划能力：仅在 todo 工具可用时注入使用规范（过滤后可能被专家禁用）
+    if (toolNames.includes("todo")) {
+      lines.push(
+        "",
+        "任务规划: 遇到需要多步骤执行、跨多个文件或耗时较长的任务时，先调用 todo 工具列出 3–6 步的任务清单，" +
+          "执行过程中随进度更新各步骤状态（pending / active / done / failed）；简单问答或单步操作不要使用 todo。"
+      )
+    }
     lines.push(
       "文件操作必须限定在工作目录内。",
       "回复使用 Markdown 格式。",
@@ -415,6 +424,7 @@ export class AgentRuntime {
           : undefined
       ),
       createSkillRunTool(this.skills, state.workspacePath),
+      createTodoTool(state.id, (event) => this.pushEvent(event)),
       createConnectorCallTool(this.connectors),
       ...createKnowledgeTools(this.kb, state.id),
       ...createMemoryTools(this.memory, this.db, state.id),

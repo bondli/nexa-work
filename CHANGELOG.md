@@ -20,8 +20,11 @@
 - 手机端：任务页新增「已归档」分组，展示归档任务（中继 session:list 合并未归档 + 归档两批）
 - 手机端：接入系统级推送（expo-notifications）——Android 建立「任务通知」有声/静音两个通知渠道，打开开关时申请 POST_NOTIFICATIONS 权限；后台/锁屏时由系统通知提醒，前台改为应用内弹窗 + 合成提示音；Expo Go 无原生模块时自动降级为应用内提醒（不崩溃）
 - 桌面端：应用图标跟随主题切换——浅色用白底黑图形（`assets/icon-light.png`），深色用黑底白图形（`assets/icon.png`）；逻辑抽为独立服务 `src/main/app-icon.ts`，统一由 `nativeTheme.shouldUseDarkColors` 驱动，主题偏好启动时同步到 `nativeTheme.themeSource`，因此切换设置或系统外观变化都会自动换图标；macOS 换 Dock 图标（`app.dock.setIcon`），Windows / Linux 换窗口任务栏图标（`BrowserWindow.setIcon`）；两张 PNG 的图形留白调整为 macOS 标准 80%（原 85%），并同步重建 `icon.icns` / `icon.ico`，保证应用未启动（启动器图标）与运行中（Dock 图标）视觉大小一致；打包后由 `extraResources` 输出到 `Resources/assets`
+- 桌面端：设置 → 通用新增「消息展示」分区（显示思考过程 / 已完成过程默认收拢 / 思考片段默认收拢），偏好以 `nexa.transcript.prefs` 持久化到 localStorage，切换立即生效
+- 桌面端：Agent 新增任务规划工具 `todo`（`src/main/agent/todo-tool.ts`），多步骤任务时由模型维护 3–6 步任务清单，经 `plan.created` / 新增的 `plan.updated` 事件推送到渲染端，驱动输入框上方的悬浮任务清单与消息内计划步骤；系统提示中注入使用规范（简单问答/单步操作不使用）；此前主进程从未发出 plan 事件、前端任务清单因此不会出现
 
 ### Changed
+- 桌面端：会话消息前端重构，替换原 `chat-shell` 巨石（1284 行）+ `components/ai-elements` 实现——新增以「轮（turn）」为单位的投影层 `buildTurns`，统一折叠系统 `disclosure`（用户手动选择优先于默认、会话内记忆、切会话清空），输入框上方悬浮任务清单 `TodoDock`（进度 + 当前步骤，运行中默认展开），左侧消息缩略导航 `ConversationMinimap`（用户消息超过 3 条且内容溢出时才显示、垂直居中、每轮一个标记、点击平滑跳转、hover 展示完整消息预览、当前位置高亮），流式正文纯文本预览 + 光标、完成后切 Markdown 并淡入、非流式长文离屏虚拟化（滚出视口替换为测高占位），回答底部用量胶囊（tokens 总量 + 吞吐，hover 看输入/输出/合计明细），产物卡片内联在最后一轮回答；助手消息改为上下结构（上方应用图标 + 「Nexa」文案，下方内容），折叠块（过程/思考/工具/计划）改为 PI-Desktop 风格的无边框行式布局（透明底 + hover 高亮 + 尾部 caret，不再使用圆角边框容器），复制按钮改为纯图标；`chat-shell` 收敛为薄壳（仅会话接线 + 布局组装），`Topbar` / `InputBar` / `WelcomeView` 迁入 `features/chat/{chat-topbar,composer/input-bar,welcome-view}.tsx`，滚动逻辑抽为 `useTranscriptScroll`，删除 `components/ai-elements/` 目录（确认无其他引用）；移除消息区顶部的粘性运行状态条（阶段/耗时/工具数已由每轮的折叠头承载）
 - 桌面端：设置 · 手机配对页的二维码缩小 10%（`144px` → `130px`，加载占位同步），源图仍按 160px 生成保证清晰度
 - 桌面端：任务列表容器隐藏滚动条（`scrollbar-width: none` + `::-webkit-scrollbar` hidden），仍可正常滚动，列表右侧不再出现滚动条占位
 - 桌面端：任务列表字号对齐 nova 类型标尺（标题/分组标题 13px、第二行 11px、右上角时间 10px，原统一 14px 偏大）；左侧主导航选中项改为 nova 同款 `bg-accent text-primary`（品牌色图标），未选中 `text-muted-foreground`

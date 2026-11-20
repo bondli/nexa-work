@@ -65,8 +65,8 @@ export interface ChatMessage {
   createdAt: number
   /** 流式中为 true，done 后变 false */
   streaming?: boolean
-  /** assistant token 用量 */
-  usage?: { input?: number; output?: number; totalTokens?: number } | null
+  /** assistant token 用量（totalTokens 含缓存读写部分） */
+  usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; totalTokens?: number } | null
   /** assistant 使用的模型标识 provider/modelId */
   model?: string
 }
@@ -238,7 +238,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     if (typeof window === "undefined" || !window.nexa) return
     try {
       const [rawMsgs, rawRuns] = await Promise.all([
-        window.nexa.loadMessages(id) as Promise<Array<{ id: string; role: string; content: string; thinking?: string | null; run_id?: string | null; attachments?: ChatAttachment[] | null; tool_name: string | null; tool_call_id: string | null; created_at: number; model?: string | null; token_usage: { input?: number; output?: number; cost?: number; totalTokens?: number } | null }>>,
+        window.nexa.loadMessages(id) as Promise<Array<{ id: string; role: string; content: string; thinking?: string | null; run_id?: string | null; attachments?: ChatAttachment[] | null; tool_name: string | null; tool_call_id: string | null; created_at: number; model?: string | null; token_usage: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; cost?: number; totalTokens?: number } | null }>>,
         window.nexa.sessionRuns(id) as Promise<Array<{ id: string; status: AgentRunInfo["status"]; started_at: number; duration_ms: number | null; tool_call_count: number }>>,
       ])
       const messages: ChatMessage[] = rawMsgs.map((m) => {
@@ -753,6 +753,35 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
             }
             return m
           })
+          return { sessions: updateConversation(s.sessions, sessId, (c) => ({ ...c, messages: msgs })) }
+        })
+        break
+      }
+
+      case "plan.updated": {
+        const sessId = evt.sessionId
+        set((s) => {
+          const conv = s.sessions[sessId]
+          if (!conv) return s
+          // 找到最近一条 plan 消息整体替换步骤；没有则补建一条
+          let targetIdx = -1
+          for (let i = conv.messages.length - 1; i >= 0; i--) {
+            if (conv.messages[i].role === "plan") {
+              targetIdx = i
+              break
+            }
+          }
+          if (targetIdx === -1) {
+            const msg: ChatMessage = {
+              id: `plan-${sessId}-${Date.now()}`,
+              role: "plan",
+              content: "",
+              plan: { steps: evt.steps },
+              createdAt: Date.now(),
+            }
+            return { sessions: updateConversation(s.sessions, sessId, (c) => ({ ...c, messages: [...c.messages, msg] })) }
+          }
+          const msgs = conv.messages.map((m, i) => (i === targetIdx ? { ...m, plan: { steps: evt.steps } } : m))
           return { sessions: updateConversation(s.sessions, sessId, (c) => ({ ...c, messages: msgs })) }
         })
         break
